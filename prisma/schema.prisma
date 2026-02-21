@@ -23,37 +23,42 @@ model User {
 
   inventoryBatch InventoryBatch[]
 
-  retailerOrders     Order[]         @relation("RetailerOrders")
-  merchandiserOrders Order[]         @relation("MerchandiserOrders")
-  retailerStock      RetailerStock[] @relation("RetailerStock")
-  dailySales         DailySale[]     @relation("RetailerDailySales")
-  isActive           Boolean         @default(true)
+  retailerOrders     Order[]           @relation("RetailerOrders")
+  merchandiserOrders Order[]           @relation("MerchandiserOrders")
+  retailerStock      RetailerStock[]   @relation("RetailerStock")
+  dailySales         DailySale[]       @relation("RetailerDailySales")
+  isActive           Boolean           @default(true)
+  retailerScore      RetailerScore[]
+  notificationLog    NotificationLog[]
 }
 
 model Product {
-  id            String           @id @default(cuid())
-  name          String
-  brand         String
-  category      String
-  unit          String
-  createdAt     DateTime         @default(now())
-  batches       InventoryBatch[]
-  retailerStock RetailerStock[]
-  dailySale     DailySale[]
+  id               String            @id @default(cuid())
+  name             String
+  brand            String
+  category         String
+  unit             String
+  createdAt        DateTime          @default(now())
+  batches          InventoryBatch[]
+  retailerStock    RetailerStock[]
+  dailySale        DailySale[]
+  ProductAnalytics ProductAnalytics?
+  retailerScore    RetailerScore[]
 }
 
 model InventoryBatch {
-  id             String      @id @default(cuid())
-  productId      String
-  product        Product     @relation(fields: [productId], references: [id])
-  merchandiserId String
-  merchandiser   User        @relation(fields: [merchandiserId], references: [id])
-  quantity       Int
-  purchasePrice  Float
-  sellingPrice   Float
-  expiryDate     DateTime
-  createdAt      DateTime    @default(now())
-  OrderItem      OrderItem[]
+  id              String            @id @default(cuid())
+  productId       String
+  product         Product           @relation(fields: [productId], references: [id])
+  merchandiserId  String
+  merchandiser    User              @relation(fields: [merchandiserId], references: [id])
+  quantity        Int
+  purchasePrice   Float
+  sellingPrice    Float
+  expiryDate      DateTime
+  createdAt       DateTime          @default(now())
+  orderItem       OrderItem[]
+  notificationLog NotificationLog[]
 
   @@index([expiryDate])
   @@index([productId])
@@ -111,4 +116,46 @@ model DailySale {
   @@unique([retailerId, productId, date])
   @@index([retailerId, productId])
   @@index([date])
+}
+
+model ProductAnalytics {
+  id                   String   @id @default(cuid())
+  productId            String   @unique
+  product              Product  @relation(fields: [productId], references: [id])
+  avgDaysToSell        Float    @default(30)
+  sellVelocityPerDay   Float    @default(0)
+  stdDevDays           Float    @default(7)
+  dynamicThresholdDays Int      @default(24)
+  lastComputedAt       DateTime @default(now())
+}
+
+model RetailerScore {
+  id                     String   @id @default(cuid())
+  retailerId             String
+  retailer               User     @relation(fields: [retailerId], references: [id])
+  productId              String
+  product                Product  @relation(fields: [productId], references: [id])
+  purchaseFrequencyScore Float    @default(0)
+  volumeScore            Float    @default(0)
+  recencyScore           Float    @default(0)
+  sellThroughScore       Float    @default(0)
+  reliabilityScore       Float    @default(0)
+  compositeScore         Float    @default(0)
+  lastUpdated            DateTime @default(now())
+
+  @@unique([retailerId, productId])
+}
+
+model NotificationLog {
+  id               String         @id @default(cuid())
+  retailerId       String
+  retailer         User           @relation(fields: [retailerId], references: [id])
+  inventoryBatchId String
+  inventoryBatch   InventoryBatch @relation(fields: [inventoryBatchId], references: [id])
+  urgencyScore     Float
+  retailerRank     Int
+  sentAt           DateTime       @default(now())
+  viewedAt         DateTime?
+  orderedAt        DateTime?
+  outcome          String         @default("pending")
 }
