@@ -28,7 +28,7 @@ model User {
   retailerStock      RetailerStock[]   @relation("RetailerStock")
   dailySales         DailySale[]       @relation("RetailerDailySales")
   isActive           Boolean           @default(true)
-  retailerScore      RetailerScore[]
+  retailerScores     RetailerScore[]
   notificationLog    NotificationLog[]
 }
 
@@ -42,8 +42,8 @@ model Product {
   batches          InventoryBatch[]
   retailerStock    RetailerStock[]
   dailySale        DailySale[]
-  ProductAnalytics ProductAnalytics?
-  retailerScore    RetailerScore[]
+  productAnalytics ProductAnalytics?
+  retailerScores   RetailerScore[]
 }
 
 model InventoryBatch {
