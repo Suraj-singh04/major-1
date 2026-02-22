@@ -35,10 +35,11 @@ export async function computeAtRiskBatches() {
             )
 
             atRiskBatches.push({
-                    ...batch,
-                    daysRemaining,
-                    urgencyScore,
-                    thresholdDays,
+                ...batch,
+                productId: batch.productId,
+                daysRemaining,
+                urgencyScore,
+                thresholdDays,
             })
         }
     }

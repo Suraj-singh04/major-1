@@ -3,15 +3,15 @@ import {prisma} from "@/lib/db";
 export async function computeProductAnalytics() {
     const products = await prisma.product.findMany({
         where: {
-            batches: {some: {}}
+            batches: { some: {} }
         }
-    });
+    })
 
-    for(const product of products) {
+    for (const product of products) {
         const orderItems = await prisma.orderItem.findMany({
             where: {
                 inventoryBatch: {
-                    productId: product.id,
+                    productId: product.id
                 }
             },
             include: {
@@ -19,14 +19,14 @@ export async function computeProductAnalytics() {
                 inventoryBatch: true,
             },
             orderBy: {
-                order: { createdAt: 'desc' },
+                order: { createdAt: 'desc' }
             }
         })
 
-        if(orderItems.length === 0) {
+        if (orderItems.length === 0) {
             await prisma.productAnalytics.upsert({
                 where: { productId: product.id },
-                update: { lastUpdatedAt: new Date() },
+                update: { lastComputedAt: new Date() },  // ← fixed: was lastUpdatedAt
                 create: {
                     productId: product.id,
                     avgDaysToSell: 30,
@@ -38,10 +38,10 @@ export async function computeProductAnalytics() {
             continue
         }
 
-        const totalUnitsSold = orderItems.reduce((sum , item) => sum + item.quantity, 0);
+        const totalUnitsSold = orderItems.reduce((sum, item) => sum + item.quantity, 0)
 
         const firstOrderDate = orderItems[orderItems.length - 1].order.createdAt
-        const today = new Date();
+        const today = new Date()
         const daysCovered = Math.max(
             1,
             (today - firstOrderDate) / (1000 * 60 * 60 * 24)
@@ -51,13 +51,13 @@ export async function computeProductAnalytics() {
 
         const orderDates = [...new Set(
             orderItems.map(item => item.order.createdAt.toDateString())
-        )].map(d => new Date(d)).sort((a,b) => a-b);
+        )].map(d => new Date(d)).sort((a, b) => a - b)
 
-        let avgDaysToSell = 30;
-        let stdDevDays = 7;
+        let avgDaysToSell = 30
+        let stdDevDays = 7
 
-        if(orderItems.length > 1) {
-            const gaps = [];
+        if (orderDates.length > 1) {
+            const gaps = []
             for (let i = 1; i < orderDates.length; i++) {
                 const gap = (orderDates[i] - orderDates[i - 1]) / (1000 * 60 * 60 * 24)
                 gaps.push(gap)
