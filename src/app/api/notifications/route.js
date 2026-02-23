@@ -50,8 +50,8 @@ export async function GET(request) {
         const [total, notifications] = await Promise.all([
             prisma.notificationLog.count({ where : whereClause}),
             prisma.notificationLog.findMany({
-                where: {whereClause},
-                order: [
+                where: whereClause,
+                orderBy: [
                     { urgencyScore: "desc"},
                     { sentAt: "desc"}
                 ],

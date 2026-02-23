@@ -2,7 +2,7 @@ import {NextResponse} from "next/server";
 
 export async function GET(req, {params}) {
     try {
-        const {id} = params;
+        const {id} = await params;
 
         const notification = await prisma.notifications.findUnique({
             where: { id },
@@ -40,7 +40,7 @@ export async function GET(req, {params}) {
 
 export async function PATCH(req, {params}) {
     try {
-        const {id} = params;
+        const {id} = await params;
 
         const body = await req.json()
         const action = body.action
