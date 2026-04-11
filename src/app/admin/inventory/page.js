@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "@/components/Merchandiser/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,19 +25,29 @@ import { Plus, Filter, Users, Calendar, Fingerprint, Package, IndianRupee, Targe
 export default function InventoryPage() {
   const [filter, setFilter] = useState("All");
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [batches, setBatches] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const mockBatches = [
-    { id: "cmlxazd1", name: "Maaza Mango 600ml", category: "Beverages", qty: 298, days: 2, price: 36.08, urgency: 0.92, status: "critical", retailers: [{ name: "Shree Ram Provision", score: 81 }, { name: "Sharma General Store", score: 66 }, { name: "Bharat Bazaar", score: 56 }] },
-    { id: "cmlxazd2", name: "Amul Cheese 200g", category: "Dairy", qty: 394, days: 2, price: 125, urgency: 0.91, status: "critical", retailers: [{ name: "Sharma General Store", score: 87 }, { name: "FreshMart", score: 72 }, { name: "City Store", score: 61 }] },
-    { id: "cmlxazd3", name: "Mother Dairy Curd", category: "Dairy", qty: 456, days: 4, price: 45, urgency: 0.72, status: "warning", retailers: [{ name: "Jai Hind Stores", score: 76 }, { name: "Kiran Provision", score: 65 }, { name: "Daily Mart", score: 55 }] },
-    { id: "cmlxazd4", name: "Tata Salt 1kg", category: "Staples", qty: 202, days: 30, price: 18, urgency: 0.1, status: "safe", retailers: [{ name: "Mega Store", score: 92 }, { name: "Shree Ram Provision", score: 88 }, { name: "Daily Needs", score: 79 }] },
-  ];
+  useEffect(() => {
+    async function fetchBatches() {
+      try {
+        const response = await fetch('/api/inventory/batches');
+        const data = await response.json();
+        setBatches(data);
+      } catch (error) {
+        console.error("Failed to fetch batches:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchBatches();
+  }, []);
 
   const filterTabs = ["All", "Critical", "Warning", "Safe", "Expired"];
 
   const filteredBatches = filter === "All"
-    ? mockBatches
-    : mockBatches.filter(b => b.status.toLowerCase() === filter.toLowerCase());
+    ? batches
+    : batches.filter(b => b.status.toLowerCase() === filter.toLowerCase());
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-50 via-slate-50 to-slate-100/80">
@@ -95,7 +105,16 @@ export default function InventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBatches.map((batch) => (
+                {loading ? (
+                  <TableRow>
+                     <TableCell colSpan={6} className="text-center py-20 text-slate-500 font-medium">
+                       <div className="flex animate-pulse flex-col items-center justify-center space-y-3">
+                         <div className="h-6 w-6 rounded-full border-t-2 border-b-2 border-blue-600 animate-spin"></div>
+                         <p>Loading inventory batches...</p>
+                       </div>
+                     </TableCell>
+                  </TableRow>
+                ) : filteredBatches.map((batch) => (
                   <TableRow
                     key={batch.id}
                     onClick={() => setSelectedBatch(batch)}
@@ -116,7 +135,7 @@ export default function InventoryPage() {
                           batch.status === 'safe' ? 'bg-emerald-100/80 text-emerald-800 hover:bg-emerald-200 border-emerald-200/50 shadow-sm px-2.5 py-0.5' :
                             'shadow-sm px-2.5 py-0.5 shadow-red-200/50'
                       }>
-                        {batch.days}
+                        {batch.status === 'expired' ? 'Expired' : `${batch.displayDays}`}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-bold text-slate-600 py-4 px-6">₹{batch.price.toFixed(2)}</TableCell>
@@ -173,7 +192,7 @@ export default function InventoryPage() {
                     </p>
                     <p className={`text-lg font-bold ${selectedBatch.status === 'critical' ? 'text-red-600' :
                         selectedBatch.status === 'warning' ? 'text-amber-600' : 'text-emerald-600'
-                      }`}>{selectedBatch.days} days left</p>
+                      }`}>{selectedBatch.status === 'expired' ? 'Expired' : `${selectedBatch.displayDays} days left`}</p>
                   </div>
                   <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center">

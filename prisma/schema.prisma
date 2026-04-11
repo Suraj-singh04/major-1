@@ -159,3 +159,12 @@ model NotificationLog {
   orderedAt        DateTime?
   outcome          String         @default("pending")
 }
+
+model EngineRunLog {
+  id             String   @id @default(cuid())
+  ranAt          DateTime @default(now())
+  atRiskCount    Int
+  notifiedCount  Int
+  runTimeSeconds Float
+}
+

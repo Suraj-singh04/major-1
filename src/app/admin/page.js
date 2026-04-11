@@ -11,8 +11,115 @@ import {
 } from "@/components/ui/table";
 import { Package, Clock, Bell, ShoppingCart, ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
+import { prisma } from "@/lib/db";
 
-export default function AdminPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function AdminPage() {
+  const now = new Date();
+  
+  // 1. STATS METRICS calculation
+  const fiveDaysFromNow = new Date();
+  fiveDaysFromNow.setDate(now.getDate() + 5);
+  
+  const atRiskBatchesCount = await prisma.inventoryBatch.count({
+    where: {
+      expiryDate: { lte: fiveDaysFromNow }
+    }
+  });
+
+  const expiringTodayEnd = new Date();
+  expiringTodayEnd.setHours(23, 59, 59, 999);
+  
+  const expiringTodayCount = await prisma.inventoryBatch.count({
+    where: {
+      expiryDate: { lte: expiringTodayEnd }
+    }
+  });
+
+  const notificationsPendingCount = await prisma.notificationLog.count({
+    where: { outcome: "pending" }
+  });
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(now.getDate() - 7);
+  
+  const ordersThisWeekCount = await prisma.order.count({
+    where: {
+      createdAt: { gte: sevenDaysAgo }
+    }
+  });
+
+  // 2. CRITICAL ALERTS
+  const criticalBatches = await prisma.inventoryBatch.findMany({
+    where: {
+      expiryDate: { lte: fiveDaysFromNow }
+    },
+    take: 5,
+    orderBy: { expiryDate: 'asc' },
+    include: { product: true }
+  });
+
+  const mappedAlerts = criticalBatches.map(batch => {
+    const diffTime = batch.expiryDate - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return {
+      name: batch.product.name,
+      time: diffDays <= 0 ? "Expired" : `${diffDays} days`,
+      units: batch.quantity,
+      status: diffDays <= 2 ? "critical" : "warning"
+    };
+  });
+
+  // Fallback defaults if no critical alerts
+  const displayAlerts = mappedAlerts.length > 0 ? mappedAlerts : [];
+
+  // 3. TOP PERFORMERS
+  const topRetailersRaw = await prisma.retailerScore.groupBy({
+    by: ['retailerId'],
+    _avg: { compositeScore: true },
+    orderBy: { _avg: { compositeScore: 'desc' } },
+    take: 3
+  });
+
+  let topRetailers = await Promise.all(topRetailersRaw.map(async (r) => {
+    const user = await prisma.user.findUnique({ where: { id: r.retailerId } });
+    const orderCount = await prisma.order.count({ where: { retailerId: r.retailerId, status: "COMPLETED", createdAt: { gte: sevenDaysAgo } } });
+    return {
+      name: user?.shopName || user?.name || "Unknown Retailer",
+      score: r._avg.compositeScore ? Math.round(r._avg.compositeScore) : 0,
+      orders: orderCount
+    };
+  }));
+
+  // Fallback map if database is totally empty 
+  if (topRetailers.length === 0) {
+     topRetailers = [
+       { name: "No ranking data", score: 0, orders: 0 }
+     ];
+  }
+
+  // 4. RECENT ENGINE RUNS
+  const recentRunsRaw = await prisma.engineRunLog.findMany({
+    take: 3,
+    orderBy: { ranAt: 'desc' }
+  });
+
+  const recentRuns = recentRunsRaw.map(run => {
+    const isToday = run.ranAt.toDateString() === now.toDateString();
+    const timeString = run.ranAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    let dateStr = isToday ? `Today ${timeString}` : `${run.ranAt.toLocaleDateString()} ${timeString}`;
+    return {
+      timeLabel: dateStr,
+      atRisk: run.atRiskCount,
+      notified: run.notifiedCount,
+      runTime: run.runTimeSeconds.toFixed(1)
+    };
+  });
+
+  const displayRuns = recentRuns.length > 0 ? recentRuns : [{timeLabel: "No runs recorded", atRisk: 0, notified: 0, runTime: "0.0"}];
+
+
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-50 via-slate-50 to-slate-100/80">
       <Sidebar />
@@ -29,7 +136,7 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-slate-200/60">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Today: 25 Feb 2026
+            Today: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
           </div>
         </header>
 
@@ -44,7 +151,7 @@ export default function AdminPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-black text-slate-800 tracking-tight">37</div>
+              <div className="text-4xl font-black text-slate-800 tracking-tight">{atRiskBatchesCount}</div>
               <p className="text-xs font-semibold text-rose-600 mt-2 bg-rose-50 inline-block px-2 py-0.5 rounded-sm">Requires attention</p>
             </CardContent>
           </Card>
@@ -58,7 +165,7 @@ export default function AdminPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-black text-slate-800 tracking-tight">8</div>
+              <div className="text-4xl font-black text-slate-800 tracking-tight">{expiringTodayCount}</div>
               <p className="text-xs font-semibold text-red-600 mt-2 bg-red-50 inline-block px-2 py-0.5 rounded-sm">Critical urgency</p>
             </CardContent>
           </Card>
@@ -72,7 +179,7 @@ export default function AdminPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-black text-slate-800 tracking-tight">185</div>
+              <div className="text-4xl font-black text-slate-800 tracking-tight">{notificationsPendingCount}</div>
               <p className="text-xs font-semibold text-amber-600 mt-2 bg-amber-50 inline-block px-2 py-0.5 rounded-sm">Ready to send</p>
             </CardContent>
           </Card>
@@ -86,7 +193,7 @@ export default function AdminPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-black text-slate-800 tracking-tight">12</div>
+              <div className="text-4xl font-black text-slate-800 tracking-tight">{ordersThisWeekCount}</div>
               <p className="text-xs font-semibold text-emerald-600 mt-2 bg-emerald-50 inline-block px-2 py-0.5 rounded-sm">From matched retailers</p>
             </CardContent>
           </Card>
@@ -98,7 +205,7 @@ export default function AdminPage() {
             <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 pb-5 pt-6">
               <div>
                 <CardTitle className="text-xl font-extrabold text-slate-800">Critical Alerts</CardTitle>
-                <CardDescription className="font-medium text-slate-500 mt-1">Highest urgency items (urgency &gt; 0.7)</CardDescription>
+                <CardDescription className="font-medium text-slate-500 mt-1">Expiring within 5 days.</CardDescription>
               </div>
               <Link href="/admin/inventory" className="flex items-center text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50/80 px-4 py-2 rounded-full hover:bg-blue-100/80 shadow-sm">
                 View All <ArrowRight className="ml-1.5 h-4 w-4" />
@@ -114,12 +221,11 @@ export default function AdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[
-                    { name: "Maaza Mango 600ml", time: "2 days", units: 298, status: "critical" },
-                    { name: "Amul Cheese 200g", time: "2 days", units: 394, status: "critical" },
-                    { name: "Mother Dairy Curd", time: "4 days", units: 456, status: "warning" },
-                    { name: "Parle-G Gold", time: "6 days", units: 1200, status: "warning" },
-                  ].map((alert, i) => (
+                  {displayAlerts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-6 text-slate-400 font-medium">No critical alerts right now!</TableCell>
+                    </TableRow>
+                  ) : displayAlerts.map((alert, i) => (
                     <TableRow key={i} className="hover:bg-slate-50/80 transition-colors border-slate-100 group cursor-pointer">
                       <TableCell className="font-semibold text-slate-800 py-4">
                         <div className="flex items-center gap-3">
@@ -146,7 +252,7 @@ export default function AdminPage() {
               <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 pb-5 pt-6">
                 <div>
                   <CardTitle className="text-xl font-extrabold text-slate-800">Top Performing Retailers</CardTitle>
-                  <CardDescription className="font-medium text-slate-500 mt-1">Ranked by successful conversion</CardDescription>
+                  <CardDescription className="font-medium text-slate-500 mt-1">Ranked by successful conversion scores</CardDescription>
                 </div>
                 <Link href="/admin/matches" className="flex items-center text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50/80 px-4 py-2 rounded-full hover:bg-blue-100/80 shadow-sm">
                   View All <ArrowRight className="ml-1.5 h-4 w-4" />
@@ -159,15 +265,11 @@ export default function AdminPage() {
                       <TableHead className="w-16 text-center font-bold text-slate-500 uppercase tracking-wider text-xs py-4">Rank</TableHead>
                       <TableHead className="font-bold text-slate-500 uppercase tracking-wider text-xs py-4">Retailer</TableHead>
                       <TableHead className="text-center font-bold text-slate-500 uppercase tracking-wider text-xs py-4">Match Score</TableHead>
-                      <TableHead className="text-right font-bold text-slate-500 uppercase tracking-wider text-xs py-4">Orders</TableHead>
+                      <TableHead className="text-right font-bold text-slate-500 uppercase tracking-wider text-xs py-4">Orders (7d)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[
-                      { name: "Sharma General Store", score: 87, orders: 4 },
-                      { name: "Shree Ram Provision", score: 81, orders: 3 },
-                      { name: "Jai Hind Stores", score: 76, orders: 2 },
-                    ].map((retailer, i) => (
+                    {topRetailers.map((retailer, i) => (
                       <TableRow key={i} className="hover:bg-slate-50/80 transition-colors border-slate-100 group cursor-pointer">
                         <TableCell className="text-center py-4">
                           <div className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-black shadow-sm ${
@@ -205,18 +307,16 @@ export default function AdminPage() {
               <CardContent className="p-0">
                 <Table>
                   <TableBody>
-                    <TableRow className="hover:bg-slate-800/50 transition-colors border-slate-700/50">
-                      <TableCell className="font-bold border-l-2 border-l-blue-500 py-4 px-6 text-slate-100">Today 9:00 AM</TableCell>
-                      <TableCell className="text-sm font-medium text-slate-300 py-4">37 at-risk</TableCell>
-                      <TableCell className="text-sm font-medium text-slate-300 py-4">185 notified</TableCell>
-                      <TableCell className="text-right text-xs font-semibold text-slate-400 py-4">7.5s run time</TableCell>
-                    </TableRow>
-                    <TableRow className="hover:bg-slate-800/50 transition-colors border-transparent">
-                      <TableCell className="font-bold border-l-2 border-l-transparent py-4 px-6 text-slate-200">Yesterday 9:00 AM</TableCell>
-                      <TableCell className="text-sm font-medium text-slate-400 py-4">41 at-risk</TableCell>
-                      <TableCell className="text-sm font-medium text-slate-400 py-4">200 notified</TableCell>
-                      <TableCell className="text-right text-xs font-semibold text-slate-500 py-4">8.1s run time</TableCell>
-                    </TableRow>
+                    {displayRuns.map((run, i) => (
+                      <TableRow key={i} className={`hover:bg-slate-800/50 transition-colors ${i === 0 ? 'border-slate-700/50' : 'border-transparent'}`}>
+                        <TableCell className={`font-bold border-l-2 py-4 px-6 text-slate-100 ${i === 0 ? 'border-l-blue-500' : 'border-l-transparent'}`}>
+                          {run.timeLabel}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium text-slate-300 py-4">{run.atRisk} at-risk</TableCell>
+                        <TableCell className="text-sm font-medium text-slate-300 py-4">{run.notified} notified</TableCell>
+                        <TableCell className="text-right text-xs font-semibold text-slate-400 py-4">{run.runTime}s run time</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
