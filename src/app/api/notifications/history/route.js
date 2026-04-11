@@ -67,6 +67,8 @@ export async function GET(request) {
         const totalSent    = allNotifications.length
         const totalViewed  = allNotifications.filter(n => n.outcome === "viewed"  || n.outcome === "ordered").length
         const totalOrdered = allNotifications.filter(n => n.outcome === "ordered").length
+        const totalIgnored = allNotifications.filter(n => n.outcome === "ignored").length
+        const totalPending = allNotifications.filter(n => n.outcome === "pending").length
 
         const conversionRate = totalSent > 0
             ? parseFloat(((totalOrdered / totalSent) * 100).toFixed(1))
@@ -86,6 +88,8 @@ export async function GET(request) {
                 totalSent,
                 totalViewed,
                 totalOrdered,
+                totalIgnored,
+                totalPending,
                 conversionRate: `${conversionRate}%`,
                 viewRate:       `${viewRate}%`,
             },
@@ -106,14 +110,14 @@ export async function GET(request) {
                 orderedAt:      n.orderedAt,
                 retailer: {
                     id:       n.retailer.id,
-                    shopName: n.retailer.shopName
+                    shopName: n.retailer.shopName || n.retailer.name
                 },
                 batch: {
-                    id:          n.inventoryBatch.id,
-                    product:     n.inventoryBatch.product.name,
-                    category:    n.inventoryBatch.product.category,
-                    expiryDate:  n.inventoryBatch.expiryDate,
-                    quantity:    n.inventoryBatch.quantity,
+                    id:           n.inventoryBatch.id,
+                    product:      n.inventoryBatch.product.name,
+                    category:     n.inventoryBatch.product.category,
+                    expiryDate:   n.inventoryBatch.expiryDate,
+                    quantity:     n.inventoryBatch.quantity,
                     sellingPrice: n.inventoryBatch.sellingPrice
                 }
             }))

@@ -28,7 +28,7 @@ export default function Sidebar() {
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "At-Risk Inventory", href: "/admin/inventory", icon: AlertTriangle, variant: "destructive", badge: "37" },
     { name: "Retailer Matches", href: "/admin/matches", icon: Users },
-    { name: "Notification Inbox", href: "/admin/inbox", icon: Inbox },
+    { name: "Alerts & Notifications", href: "/admin/notifications", icon: Inbox },
     { name: "Scoring Analytics", href: "/admin/scoring", icon: Activity },
     { name: "Weight Evolution", href: "/admin/weights", icon: TrendingUp },
   ];
