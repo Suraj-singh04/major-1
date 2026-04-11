@@ -121,9 +121,11 @@ export default function InventoryPage() {
                     className="hover:bg-slate-50/80 transition-colors border-slate-100 cursor-pointer group"
                   >
                     <TableCell className="text-center py-4 px-6">
-                      <div className={`mx-auto h-2.5 w-2.5 rounded-full ring-4 shadow-sm ${batch.status === 'critical' ? 'bg-red-500 ring-red-100 animate-pulse' :
-                          batch.status === 'warning' ? 'bg-amber-400 ring-amber-100' :
-                            'bg-emerald-500 ring-emerald-100'
+                      <div className={`mx-auto h-2.5 w-2.5 rounded-full ring-4 shadow-sm ${
+                          batch.status === 'expired'  ? 'bg-rose-700 ring-rose-100' :
+                          batch.status === 'critical' ? 'bg-red-500 ring-red-100 animate-pulse' :
+                          batch.status === 'warning'  ? 'bg-amber-400 ring-amber-100' :
+                                                        'bg-emerald-500 ring-emerald-100'
                         }`}></div>
                     </TableCell>
                     <TableCell className="font-bold text-slate-800 py-4 group-hover:text-blue-700 transition-colors">{batch.name}</TableCell>
@@ -190,8 +192,10 @@ export default function InventoryPage() {
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center">
                       <Calendar className="mr-1.5 h-3.5 w-3.5" /> Expiry Status
                     </p>
-                    <p className={`text-lg font-bold ${selectedBatch.status === 'critical' ? 'text-red-600' :
-                        selectedBatch.status === 'warning' ? 'text-amber-600' : 'text-emerald-600'
+                    <p className={`text-lg font-bold ${
+                        selectedBatch.status === 'expired'  ? 'text-rose-700' :
+                        selectedBatch.status === 'critical' ? 'text-red-600' :
+                        selectedBatch.status === 'warning'  ? 'text-amber-600' : 'text-emerald-600'
                       }`}>{selectedBatch.status === 'expired' ? 'Expired' : `${selectedBatch.displayDays} days left`}</p>
                   </div>
                   <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">

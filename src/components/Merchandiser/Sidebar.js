@@ -20,17 +20,19 @@ import {
   TrendingUp,
   Settings,
   LogOut,
-  PackageSearch
+  PackageSearch,
+  Zap,
 } from "lucide-react";
 
 export default function Sidebar() {
   const navItems = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "At-Risk Inventory", href: "/admin/inventory", icon: AlertTriangle, variant: "destructive", badge: "37" },
-    { name: "Retailer Matches", href: "/admin/matches", icon: Users },
+    { name: "Retailer Profiles", href: "/admin/retailers", icon: Users },
     { name: "Alerts & Notifications", href: "/admin/notifications", icon: Inbox },
-    { name: "Scoring Analytics", href: "/admin/scoring", icon: Activity },
+    { name: "Analytics", href: "/admin/analytics", icon: Activity },
     { name: "Weight Evolution", href: "/admin/weights", icon: TrendingUp },
+    { name: "Engine Control", href: "/admin/engine", icon: Zap },
   ];
 
   return (

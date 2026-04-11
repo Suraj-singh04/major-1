@@ -3,6 +3,7 @@ import {computeAtRiskBatches} from "@/lib/engine/computeAtRiskBatches";
 import {scoreRetailersForProduct} from "@/lib/engine/scoreRetailer";
 import {NextResponse} from "next/server";
 import {writeNotifications} from "@/lib/engine/writeNotifications";
+import {prisma} from "@/lib/db";
 
 export async function POST() {
     const engineStartTime = new Date();
@@ -16,11 +17,17 @@ export async function POST() {
 
         // If no batches are at risk, return early.
         if (atRiskBatches.length === 0) {
+            const runMs = Date.now() - engineStartTime;
+
+            await prisma.engineRunLog.create({
+                data: { atRiskCount: 0, notifiedCount: 0, runTimeSeconds: runMs / 1000 }
+            });
+
             return NextResponse.json({
                 success:      true,
                 atRiskCount:  0,
                 message:      "No at-risk batches found. Inventory looks healthy.",
-                engineRunMs:  Date.now() - engineStartTime,
+                engineRunMs:  runMs,
                 batches:      []
             })
         }
@@ -39,6 +46,17 @@ export async function POST() {
         const { notificationsCreated, notificationsSkipped } =
             await writeNotifications(atRiskBatches, productScores)
 
+        const runMs = Date.now() - engineStartTime;
+
+        // Persist this run to EngineRunLog
+        await prisma.engineRunLog.create({
+            data: {
+                atRiskCount:    atRiskBatches.length,
+                notifiedCount:  notificationsCreated,
+                runTimeSeconds: runMs / 1000,
+            }
+        });
+
         // Combine: attach top retailers to each batch
         const result = atRiskBatches.map(batch => ({
             batchId:       batch.id,
@@ -56,12 +74,25 @@ export async function POST() {
             atRiskCount: atRiskBatches.length,
             notificationsCreated,
             notificationsSkipped,
-            engineRunMs: Date.now() - engineStartTime,
+            engineRunMs: runMs,
             batches: result
         })
 
     } catch (error) {
         console.error("Engine error:", error)
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+}
+
+// GET — return run history for the control panel
+export async function GET() {
+    try {
+        const runs = await prisma.engineRunLog.findMany({
+            take: 10,
+            orderBy: { ranAt: "desc" }
+        });
+        return NextResponse.json({ success: true, runs });
+    } catch (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

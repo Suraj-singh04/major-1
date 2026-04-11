@@ -23,7 +23,7 @@ export async function GET() {
       const now = new Date();
       const diffTime = batch.expiryDate - now;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+
       const daysLeft = diffDays;
       let status = "safe";
 
@@ -35,7 +35,7 @@ export async function GET() {
       let urgency = 0;
       if (daysLeft <= 0) urgency = 1.0;
       else if (daysLeft < 30) urgency = 1 - (daysLeft / 30);
-      
+
       // Ensure positive values just for UI presentation consistency
       const displayDays = Math.abs(daysLeft);
 
@@ -51,7 +51,7 @@ export async function GET() {
         status: status,
         retailers: batch.product.retailerScores.map(rs => ({
           name: rs.retailer.name || rs.retailer.shopName || "Unknown Retailer",
-          score: Math.round(rs.compositeScore) // Scale to 100 if it's currently 0-100 or format as needed
+          score: Math.round(rs.compositeScore * 100) // compositeScore is 0-1 float in DB
         }))
       };
     });
