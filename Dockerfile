@@ -34,6 +34,9 @@ WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 
+# Install prisma globally to execute migrations without missing dependencies like 'effect'
+RUN npm install -g prisma@7.7.0
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
