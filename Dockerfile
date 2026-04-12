@@ -18,6 +18,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma Client (needed before build)
+# We supply a dummy URL here because prisma generate requires the variable to exist
+# to parse prisma.config.ts, but it doesn't actually connect to the database.
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost/dummy"
 RUN npx prisma generate
 
 # Next.js build
