@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import AdminPage from "./admin/page";
 
 export default function Home() {
