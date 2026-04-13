@@ -40,8 +40,9 @@ RUN npm install -g prisma@7.7.0
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy Prisma schema and engine to run migrations
+# Copy Prisma schema and config to run migrations
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
 # We rely purely on the global Prisma CLI and the standalone Next.js node_modules
 
 COPY --from=builder /app/public ./public
