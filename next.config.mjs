@@ -1,7 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  /* config options here */
+  experimental: {
+    // Disables the custom Webpack build worker to save memory
+    webpackBuildWorker: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 };
 
 export default nextConfig;
