@@ -46,5 +46,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run migrations dynamically without installing, then start the server on fixed port 3000
-CMD ["sh", "-c", "npx --yes prisma@6.19.3 db push --accept-data-loss && PORT=3000 node server.js"]
+# Run migrations dynamically, seed the database with demo data, then start the server on fixed port 3000
+CMD ["sh", "-c", "npx --yes prisma@6.19.3 db push --accept-data-loss && node prisma/seed.js && PORT=3000 node server.js"]
