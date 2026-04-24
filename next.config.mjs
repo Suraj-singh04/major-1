@@ -2,14 +2,10 @@
 const nextConfig = {
   output: 'standalone',
   experimental: {
-    // Disables the custom Webpack build worker to save memory
     webpackBuildWorker: false,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
+  turbopack: {
+    root: import.meta.dirname,
   },
 };
 
