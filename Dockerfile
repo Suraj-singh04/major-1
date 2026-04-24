@@ -47,4 +47,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Run migrations dynamically without installing, then start the server on fixed port 3000
-CMD ["sh", "-c", "npx --yes prisma@6.19.3 migrate deploy && PORT=3000 node server.js"]
+CMD ["sh", "-c", "npx --yes prisma@6.19.3 db push --accept-data-loss && PORT=3000 node server.js"]
