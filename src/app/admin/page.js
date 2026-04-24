@@ -16,7 +16,8 @@ import { prisma } from "@/lib/db";
 export const dynamic = 'force-dynamic';
 
 export default async function AdminPage() {
-  const now = new Date();
+  try {
+    const now = new Date();
   
   // 1. STATS METRICS calculation
   const fiveDaysFromNow = new Date();
@@ -326,4 +327,13 @@ export default async function AdminPage() {
       </main>
     </div>
   );
+  } catch (error) {
+    return (
+      <div className="p-10 text-red-600 font-bold bg-red-50 rounded-lg m-10 border border-red-200">
+        <h1 className="text-2xl mb-4">Server-Side Exception</h1>
+        <pre className="whitespace-pre-wrap">{error.message}</pre>
+        <pre className="whitespace-pre-wrap mt-4 text-sm text-slate-500">{error.stack}</pre>
+      </div>
+    );
+  }
 }
