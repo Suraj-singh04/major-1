@@ -38,10 +38,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
-# Install production dependencies and Prisma CLI for migrations
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-RUN npm install prisma@6.19.3
+
 
 USER nextjs
 
@@ -49,5 +46,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run migrations, then start the server
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Run migrations dynamically without installing, then start the server
+CMD ["sh", "-c", "npx --yes prisma@6.19.3 migrate deploy && node server.js"]
