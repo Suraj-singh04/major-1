@@ -1,445 +1,898 @@
 // prisma/seed.js
 // Run with: node prisma/seed.js
-// Make sure your DATABASE_URL is set in .env
+//
+// What's new in this version:
+// 1. Realistic Indian retailer profiles with real buying patterns
+// 2. Thresholds are generous — products flagged early enough for retailers to sell
+// 3. Dynamic pricing — price drops based on how close to expiry
+// 4. Diverse order history so scoring produces meaningful differentiation
+// 5. Real product data with accurate shelf lives
 
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { PrismaClient } = require("@prisma/client")
+const prisma = new PrismaClient()
 
-// ─── HELPERS ────────────────────────────────────────────────────────────────
+// ── HELPERS ──────────────────────────────────────────────────────────────────
 
 function randomBetween(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
 function randomFloat(min, max, decimals = 2) {
-    return parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
+    return parseFloat((Math.random() * (max - min) + min).toFixed(decimals))
 }
 
 function randomItem(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
+    return arr[Math.floor(Math.random() * arr.length)]
 }
 
-// Returns a date that is `daysFromNow` days in the future (positive) or past (negative)
 function daysFromNow(days) {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return d;
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return d
 }
 
-// Returns a random date between two day offsets from today
-function randomDateBetween(minDays, maxDays) {
-    return daysFromNow(randomBetween(minDays, maxDays));
+// ── DYNAMIC PRICING LOGIC ─────────────────────────────────────────────────────
+// The more urgent the batch, the lower the price offered to retailers.
+// This gives retailers a real incentive to take near-expiry stock.
+//
+// urgencyScore 0.0 → full wholesale price (no discount)
+// urgencyScore 0.3 → 5% discount
+// urgencyScore 0.6 → 12% discount
+// urgencyScore 0.9 → 20% discount
+//
+// This is applied when creating batches so the DB has realistic selling prices.
+function computeDiscountedPrice(baseWholesalePrice, urgencyScore) {
+    const maxDiscount = 0.20  // 20% max discount at urgency = 1.0
+    const discount = urgencyScore * maxDiscount
+    return parseFloat((baseWholesalePrice * (1 - discount)).toFixed(2))
 }
 
-// ─── MASTER DATA ─────────────────────────────────────────────────────────────
+// ── PRODUCT CATALOGUE ─────────────────────────────────────────────────────────
+// avgSellDays: realistic days this product takes to sell at retail
+// warningDays: how many days before expiry the ENGINE should flag this product
+//              This is intentionally generous — retailer needs time to sell!
+//              Rule of thumb: warningDays = avgSellDays * 2.5
+// mrp: max retail price (what end consumer pays)
+// wholesale: what retailer normally pays the merchandiser
+//
+// Example: Maggi noodles average 20 days to sell → warn at 50 days before expiry
+// This gives the retailer time to actually sell it before it expires on their shelf
 
 const PRODUCTS = [
-    // Fast-moving dairy — expires quickly, high velocity
-    { name: "Amul Full Cream Milk 1L", brand: "Amul", category: "Dairy", unit: "Litre", avgSellDays: 4, priceRange: [55, 62] },
-    { name: "Amul Butter 500g", brand: "Amul", category: "Dairy", unit: "Pack", avgSellDays: 8, priceRange: [240, 260] },
-    { name: "Mother Dairy Curd 400g", brand: "Mother Dairy", category: "Dairy", unit: "Pack", avgSellDays: 5, priceRange: [45, 55] },
-    { name: "Amul Cheese Slices 200g", brand: "Amul", category: "Dairy", unit: "Pack", avgSellDays: 10, priceRange: [120, 140] },
-    { name: "Nestle Yogurt Mango 100g", brand: "Nestle", category: "Dairy", unit: "Cup", avgSellDays: 6, priceRange: [25, 35] },
+    // ── DAIRY (short shelf life, needs early warning) ─────────────────────────
+    {
+        name: "Amul Full Cream Milk 1L",
+        brand: "Amul",
+        category: "Dairy",
+        unit: "Litre",
+        avgSellDays: 3,
+        warningDays: 10,   // warn 10 days before expiry — dairy sells fast but spoils fast
+        mrp: 68,
+        wholesale: 58,
+    },
+    {
+        name: "Amul Butter 500g",
+        brand: "Amul",
+        category: "Dairy",
+        unit: "Pack",
+        avgSellDays: 10,
+        warningDays: 30,
+        mrp: 285,
+        wholesale: 252,
+    },
+    {
+        name: "Mother Dairy Curd 400g",
+        brand: "Mother Dairy",
+        category: "Dairy",
+        unit: "Pack",
+        avgSellDays: 4,
+        warningDays: 12,
+        mrp: 55,
+        wholesale: 47,
+    },
+    {
+        name: "Amul Cheese Slices 200g",
+        brand: "Amul",
+        category: "Dairy",
+        unit: "Pack",
+        avgSellDays: 12,
+        warningDays: 35,
+        mrp: 145,
+        wholesale: 122,
+    },
+    {
+        name: "Nestle Yogurt Strawberry 100g",
+        brand: "Nestle",
+        category: "Dairy",
+        unit: "Cup",
+        avgSellDays: 7,
+        warningDays: 20,
+        mrp: 38,
+        wholesale: 30,
+    },
+    {
+        name: "Patanjali Ghee 500ml",
+        brand: "Patanjali",
+        category: "Dairy",
+        unit: "Jar",
+        avgSellDays: 25,
+        warningDays: 60,
+        mrp: 295,
+        wholesale: 260,
+    },
 
-    // Packaged snacks — medium shelf life
-    { name: "Lays Classic Salted 26g", brand: "Lays", category: "Snacks", unit: "Pack", avgSellDays: 18, priceRange: [10, 10] },
-    { name: "Kurkure Masala Munch 90g", brand: "Kurkure", category: "Snacks", unit: "Pack", avgSellDays: 20, priceRange: [20, 20] },
-    { name: "Parle-G Biscuits 800g", brand: "Parle", category: "Biscuits", unit: "Pack", avgSellDays: 25, priceRange: [40, 45] },
-    { name: "Britannia Good Day 200g", brand: "Britannia", category: "Biscuits", unit: "Pack", avgSellDays: 22, priceRange: [30, 35] },
-    { name: "Hide & Seek Chocolate 120g", brand: "Parle", category: "Biscuits", unit: "Pack", avgSellDays: 28, priceRange: [30, 32] },
+    // ── BEVERAGES ─────────────────────────────────────────────────────────────
+    {
+        name: "Minute Maid Pulpy Orange 1L",
+        brand: "Coca-Cola",
+        category: "Beverages",
+        unit: "Bottle",
+        avgSellDays: 14,
+        warningDays: 40,
+        mrp: 99,
+        wholesale: 82,
+    },
+    {
+        name: "Real Fruit Juice Mixed 1L",
+        brand: "Dabur",
+        category: "Beverages",
+        unit: "Bottle",
+        avgSellDays: 16,
+        warningDays: 45,
+        mrp: 130,
+        wholesale: 108,
+    },
+    {
+        name: "Paper Boat Aamras 250ml",
+        brand: "Paper Boat",
+        category: "Beverages",
+        unit: "Pack",
+        avgSellDays: 12,
+        warningDays: 35,
+        mrp: 40,
+        wholesale: 32,
+    },
+    {
+        name: "Maaza Mango 600ml",
+        brand: "Coca-Cola",
+        category: "Beverages",
+        unit: "Bottle",
+        avgSellDays: 18,
+        warningDays: 50,
+        mrp: 45,
+        wholesale: 36,
+    },
+    {
+        name: "Tropicana Orange 1L",
+        brand: "PepsiCo",
+        category: "Beverages",
+        unit: "Bottle",
+        avgSellDays: 15,
+        warningDays: 42,
+        mrp: 120,
+        wholesale: 99,
+    },
 
-    // Beverages
-    { name: "Minute Maid Pulpy Orange 1L", brand: "Coca-Cola", category: "Beverages", unit: "Bottle", avgSellDays: 12, priceRange: [80, 90] },
-    { name: "Real Fruit Juice Mixed 1L", brand: "Dabur", category: "Beverages", unit: "Bottle", avgSellDays: 14, priceRange: [110, 120] },
-    { name: "Paper Boat Aamras 250ml", brand: "Paper Boat", category: "Beverages", unit: "Pack", avgSellDays: 10, priceRange: [30, 35] },
-    { name: "Maaza Mango 600ml", brand: "Coca-Cola", category: "Beverages", unit: "Bottle", avgSellDays: 15, priceRange: [35, 40] },
+    // ── SNACKS ────────────────────────────────────────────────────────────────
+    {
+        name: "Lays Classic Salted 52g",
+        brand: "PepsiCo",
+        category: "Snacks",
+        unit: "Pack",
+        avgSellDays: 20,
+        warningDays: 55,
+        mrp: 20,
+        wholesale: 16,
+    },
+    {
+        name: "Kurkure Masala Munch 90g",
+        brand: "PepsiCo",
+        category: "Snacks",
+        unit: "Pack",
+        avgSellDays: 22,
+        warningDays: 60,
+        mrp: 25,
+        wholesale: 20,
+    },
+    {
+        name: "Haldirams Aloo Bhujia 200g",
+        brand: "Haldirams",
+        category: "Snacks",
+        unit: "Pack",
+        avgSellDays: 25,
+        warningDays: 65,
+        mrp: 85,
+        wholesale: 70,
+    },
 
-    // Personal care / FMCG with longer shelf life
-    { name: "Dettol Handwash 250ml", brand: "Dettol", category: "Personal Care", unit: "Bottle", avgSellDays: 35, priceRange: [85, 95] },
-    { name: "Colgate MaxFresh 150g", brand: "Colgate", category: "Personal Care", unit: "Tube", avgSellDays: 30, priceRange: [70, 80] },
+    // ── BISCUITS ──────────────────────────────────────────────────────────────
+    {
+        name: "Parle-G Biscuits 800g",
+        brand: "Parle",
+        category: "Biscuits",
+        unit: "Pack",
+        avgSellDays: 28,
+        warningDays: 70,
+        mrp: 50,
+        wholesale: 42,
+    },
+    {
+        name: "Britannia Good Day Cashew 200g",
+        brand: "Britannia",
+        category: "Biscuits",
+        unit: "Pack",
+        avgSellDays: 25,
+        warningDays: 65,
+        mrp: 40,
+        wholesale: 33,
+    },
+    {
+        name: "Hide & Seek Chocolate 120g",
+        brand: "Parle",
+        category: "Biscuits",
+        unit: "Pack",
+        avgSellDays: 30,
+        warningDays: 75,
+        mrp: 35,
+        wholesale: 28,
+    },
+    {
+        name: "Maggi 2-Minute Noodles 12-pack",
+        brand: "Nestle",
+        category: "Instant Food",
+        unit: "Pack",
+        avgSellDays: 20,
+        warningDays: 55,   // warn 55 days before expiry so retailer has 35 days to sell
+        mrp: 132,
+        wholesale: 110,
+    },
 
-    // Staples
-    { name: "Tata Salt 1kg", brand: "Tata", category: "Staples", unit: "Pack", avgSellDays: 40, priceRange: [22, 25] },
-    { name: "Fortune Soyabean Oil 1L", brand: "Fortune", category: "Staples", unit: "Bottle", avgSellDays: 35, priceRange: [140, 155] },
-    { name: "Aashirvaad Atta 5kg", brand: "ITC", category: "Staples", unit: "Bag", avgSellDays: 20, priceRange: [230, 250] },
-    { name: "Patanjali Ghee 500ml", brand: "Patanjali", category: "Dairy", unit: "Jar", avgSellDays: 22, priceRange: [260, 280] },
-];
+    // ── STAPLES ───────────────────────────────────────────────────────────────
+    {
+        name: "Tata Salt 1kg",
+        brand: "Tata",
+        category: "Staples",
+        unit: "Pack",
+        avgSellDays: 45,
+        warningDays: 90,   // salt has long shelf life but warn early anyway
+        mrp: 28,
+        wholesale: 22,
+    },
+    {
+        name: "Fortune Soyabean Oil 1L",
+        brand: "Fortune",
+        category: "Staples",
+        unit: "Bottle",
+        avgSellDays: 38,
+        warningDays: 85,
+        mrp: 165,
+        wholesale: 140,
+    },
+    {
+        name: "Aashirvaad Atta 5kg",
+        brand: "ITC",
+        category: "Staples",
+        unit: "Bag",
+        avgSellDays: 22,
+        warningDays: 60,
+        mrp: 265,
+        wholesale: 235,
+    },
 
-const RETAILER_SHOPS = [
-    { shopName: "Sharma General Store", address: "Station Road, Jaipur" },
-    { shopName: "Rajputana Kirana", address: "Nehru Nagar, Ajmer" },
-    { shopName: "Meena Traders", address: "Civil Lines, Jodhpur" },
-    { shopName: "Shree Ram Provision", address: "Sindhi Camp, Jaipur" },
-    { shopName: "Jai Hind Stores", address: "Lal Kothi, Jaipur" },
-    { shopName: "Vaishnav Mart", address: "Gopalpura, Jaipur" },
-    { shopName: "Bharat Bazaar", address: "Mansarovar, Jaipur" },
-    { shopName: "Om Shanti Kirana", address: "Sodala, Jaipur" },
-    { shopName: "Gupta Super Store", address: "Murlipura, Jaipur" },
-    { shopName: "Rajdhani Retail", address: "Vidhyadhar Nagar, Jaipur" },
-    { shopName: "New India Stores", address: "Tonk Road, Jaipur" },
-    { shopName: "Soni Provision", address: "Bapu Nagar, Jaipur" },
-    { shopName: "Mahaveer Traders", address: "C-Scheme, Jaipur" },
-    { shopName: "Shreenath Kirana", address: "Vaishali Nagar, Jaipur" },
-    { shopName: "Durga General Store", address: "Raja Park, Jaipur" },
-];
+    // ── PERSONAL CARE ─────────────────────────────────────────────────────────
+    {
+        name: "Dettol Handwash 250ml",
+        brand: "Dettol",
+        category: "Personal Care",
+        unit: "Bottle",
+        avgSellDays: 35,
+        warningDays: 80,
+        mrp: 105,
+        wholesale: 88,
+    },
+    {
+        name: "Colgate MaxFresh 150g",
+        brand: "Colgate",
+        category: "Personal Care",
+        unit: "Tube",
+        avgSellDays: 32,
+        warningDays: 75,
+        mrp: 88,
+        wholesale: 72,
+    },
+    {
+        name: "Lifebuoy Total 10 Soap 4-pack",
+        brand: "HUL",
+        category: "Personal Care",
+        unit: "Pack",
+        avgSellDays: 28,
+        warningDays: 70,
+        mrp: 72,
+        wholesale: 60,
+    },
+]
 
-const MERCHANDISER_NAMES = [
-    { name: "Vikram Agarwal Distributors", address: "Industrial Area, Jaipur" },
-    { name: "Rajasthan FMCG Hub", address: "Sanganer, Jaipur" },
-    { name: "Jaipur Wholesale Depot", address: "Sitapura, Jaipur" },
-];
+// ── REALISTIC RETAILER PROFILES ───────────────────────────────────────────────
+// Each retailer has a defined personality that determines their scoring.
+// This is what makes the engine rankings meaningful and differentiated.
+//
+// Tier 1 (rank 1-5): Large shops, buy frequently, sell fast, reliable
+// Tier 2 (rank 6-10): Medium shops, buy occasionally, decent sell-through
+// Tier 3 (rank 11-15): Small shops, infrequent buyers, slower sell-through
 
-// ─── MAIN SEEDER ─────────────────────────────────────────────────────────────
+const RETAILERS = [
+    // ── TIER 1: High-value buyers ─────────────────────────────────────────────
+    {
+        shopName: "Sharma General Store",
+        ownerName: "Rajesh Sharma",
+        address: "Station Road, Jaipur",
+        city: "Jaipur",
+        phone: "9829100001",
+        tier: 1,
+        preferredCategories: ["Dairy", "Beverages", "Staples"],
+        orderFrequencyDays: 4,   // orders every 4 days
+        avgUnitsPerOrder: 120,
+        reliability: 0.96,       // 96% orders completed
+        sellThroughSpeed: "fast", // clears stock in 60-70% of avg sell days
+    },
+    {
+        shopName: "Shree Ram Provision Store",
+        ownerName: "Ramesh Kumar",
+        address: "Sindhi Camp, Jaipur",
+        city: "Jaipur",
+        phone: "9829100002",
+        tier: 1,
+        preferredCategories: ["Beverages", "Snacks", "Biscuits"],
+        orderFrequencyDays: 3,
+        avgUnitsPerOrder: 140,
+        reliability: 0.94,
+        sellThroughSpeed: "fast",
+    },
+    {
+        shopName: "Jai Hind Stores",
+        ownerName: "Suresh Gupta",
+        address: "Lal Kothi, Jaipur",
+        city: "Jaipur",
+        phone: "9829100003",
+        tier: 1,
+        preferredCategories: ["Biscuits", "Snacks", "Instant Food"],
+        orderFrequencyDays: 4,
+        avgUnitsPerOrder: 110,
+        reliability: 0.95,
+        sellThroughSpeed: "fast",
+    },
+    {
+        shopName: "Meena Traders",
+        ownerName: "Dinesh Meena",
+        address: "Civil Lines, Jodhpur",
+        city: "Jodhpur",
+        phone: "9829100004",
+        tier: 1,
+        preferredCategories: ["Staples", "Personal Care", "Dairy"],
+        orderFrequencyDays: 5,
+        avgUnitsPerOrder: 100,
+        reliability: 0.93,
+        sellThroughSpeed: "fast",
+    },
+    {
+        shopName: "Rajputana Kirana",
+        ownerName: "Vikram Singh Rathore",
+        address: "Nehru Nagar, Ajmer",
+        city: "Ajmer",
+        phone: "9829100005",
+        tier: 1,
+        preferredCategories: ["Dairy", "Staples", "Beverages"],
+        orderFrequencyDays: 5,
+        avgUnitsPerOrder: 95,
+        reliability: 0.92,
+        sellThroughSpeed: "fast",
+    },
+
+    // ── TIER 2: Medium buyers ─────────────────────────────────────────────────
+    {
+        shopName: "Bharat Bazaar",
+        ownerName: "Anil Verma",
+        address: "Mansarovar, Jaipur",
+        city: "Jaipur",
+        phone: "9829100006",
+        tier: 2,
+        preferredCategories: ["Beverages", "Dairy"],
+        orderFrequencyDays: 10,
+        avgUnitsPerOrder: 60,
+        reliability: 0.82,
+        sellThroughSpeed: "medium",
+    },
+    {
+        shopName: "Rajdhani Retail",
+        ownerName: "Pradeep Joshi",
+        address: "Vidhyadhar Nagar, Jaipur",
+        city: "Jaipur",
+        phone: "9829100007",
+        tier: 2,
+        preferredCategories: ["Dairy", "Biscuits"],
+        orderFrequencyDays: 9,
+        avgUnitsPerOrder: 55,
+        reliability: 0.80,
+        sellThroughSpeed: "medium",
+    },
+    {
+        shopName: "Gupta Super Store",
+        ownerName: "Mahesh Gupta",
+        address: "Murlipura, Jaipur",
+        city: "Jaipur",
+        phone: "9829100008",
+        tier: 2,
+        preferredCategories: ["Staples", "Personal Care"],
+        orderFrequencyDays: 11,
+        avgUnitsPerOrder: 50,
+        reliability: 0.78,
+        sellThroughSpeed: "medium",
+    },
+    {
+        shopName: "Vaishnav Mart",
+        ownerName: "Harish Vaishnav",
+        address: "Gopalpura, Jaipur",
+        city: "Jaipur",
+        phone: "9829100009",
+        tier: 2,
+        preferredCategories: ["Personal Care", "Staples"],
+        orderFrequencyDays: 12,
+        avgUnitsPerOrder: 45,
+        reliability: 0.76,
+        sellThroughSpeed: "medium",
+    },
+    {
+        shopName: "New India Stores",
+        ownerName: "Govind Prasad",
+        address: "Tonk Road, Jaipur",
+        city: "Jaipur",
+        phone: "9829100010",
+        tier: 2,
+        preferredCategories: ["Snacks", "Beverages"],
+        orderFrequencyDays: 10,
+        avgUnitsPerOrder: 65,
+        reliability: 0.83,
+        sellThroughSpeed: "medium",
+    },
+
+    // ── TIER 3: Small / infrequent buyers ─────────────────────────────────────
+    {
+        shopName: "Soni Provision Store",
+        ownerName: "Kamlesh Soni",
+        address: "Bapu Nagar, Jaipur",
+        city: "Jaipur",
+        phone: "9829100011",
+        tier: 3,
+        preferredCategories: ["Staples"],
+        orderFrequencyDays: 22,
+        avgUnitsPerOrder: 25,
+        reliability: 0.65,
+        sellThroughSpeed: "slow",
+    },
+    {
+        shopName: "Om Shanti Kirana",
+        ownerName: "Brijmohan Sharma",
+        address: "Sodala, Jaipur",
+        city: "Jaipur",
+        phone: "9829100012",
+        tier: 3,
+        preferredCategories: ["Biscuits"],
+        orderFrequencyDays: 25,
+        avgUnitsPerOrder: 20,
+        reliability: 0.60,
+        sellThroughSpeed: "slow",
+    },
+    {
+        shopName: "Mahaveer Traders",
+        ownerName: "Santosh Jain",
+        address: "C-Scheme, Jaipur",
+        city: "Jaipur",
+        phone: "9829100013",
+        tier: 3,
+        preferredCategories: ["Dairy"],
+        orderFrequencyDays: 28,
+        avgUnitsPerOrder: 18,
+        reliability: 0.58,
+        sellThroughSpeed: "slow",
+    },
+    {
+        shopName: "Shreenath Kirana",
+        ownerName: "Ramkishore Pareek",
+        address: "Vaishali Nagar, Jaipur",
+        city: "Jaipur",
+        phone: "9829100014",
+        tier: 3,
+        preferredCategories: ["Snacks", "Biscuits"],
+        orderFrequencyDays: 30,
+        avgUnitsPerOrder: 15,
+        reliability: 0.55,
+        sellThroughSpeed: "slow",
+    },
+    {
+        shopName: "Durga General Store",
+        ownerName: "Mohan Lal Sharma",
+        address: "Raja Park, Jaipur",
+        city: "Jaipur",
+        phone: "9829100015",
+        tier: 3,
+        preferredCategories: ["Staples", "Personal Care"],
+        orderFrequencyDays: 26,
+        avgUnitsPerOrder: 22,
+        reliability: 0.62,
+        sellThroughSpeed: "slow",
+    },
+]
+
+const MERCHANDISERS = [
+    {
+        name: "Vikram Agarwal",
+        shopName: "Vikram Agarwal Distributors",
+        address: "Industrial Area Phase 2, Jaipur",
+        phone: "9828000001",
+    },
+    {
+        name: "Sunil Bansal",
+        shopName: "Rajasthan FMCG Hub",
+        address: "Sanganer, Jaipur",
+        phone: "9828000002",
+    },
+    {
+        name: "Amit Khandelwal",
+        shopName: "Jaipur Wholesale Depot",
+        address: "Sitapura Industrial Area, Jaipur",
+        phone: "9828000003",
+    },
+]
+
+// ── MAIN SEEDER ───────────────────────────────────────────────────────────────
 
 async function main() {
-    console.log("🌱 Starting seed...\n");
+    console.log("🌱 Starting ShelfSense seed — v2 (realistic data)\n")
 
-    // ── 0. CLEAR EXISTING DATA (in correct FK order) ──────────────────────────
-    console.log("🗑️  Clearing existing data...");
-    await prisma.notificationLog.deleteMany().catch(() => {}); // new table may not exist yet
-    await prisma.retailerScore.deleteMany().catch(() => {});
-    await prisma.productAnalytics.deleteMany().catch(() => {});
-    await prisma.dailySale.deleteMany();
-    await prisma.orderItem.deleteMany();
-    await prisma.order.deleteMany();
-    await prisma.retailerStock.deleteMany();
-    await prisma.inventoryBatch.deleteMany();
-    await prisma.product.deleteMany();
-    await prisma.user.deleteMany();
-    console.log("✅ Cleared\n");
+    // ── CLEAR EXISTING DATA ───────────────────────────────────────────────────
+    console.log("🗑️  Clearing existing data...")
+    await prisma.engineRunLog.deleteMany().catch(() => { })
+    await prisma.notificationLog.deleteMany().catch(() => { })
+    await prisma.retailerScore.deleteMany().catch(() => { })
+    await prisma.productAnalytics.deleteMany().catch(() => { })
+    await prisma.dailySale.deleteMany().catch(() => { })
+    await prisma.orderItem.deleteMany().catch(() => { })
+    await prisma.order.deleteMany().catch(() => { })
+    await prisma.retailerStock.deleteMany().catch(() => { })
+    await prisma.inventoryBatch.deleteMany().catch(() => { })
+    await prisma.product.deleteMany().catch(() => { })
+    await prisma.user.deleteMany().catch(() => { })
+    console.log("   ✅ Cleared\n")
 
     // ── 1. CREATE MERCHANDISERS ───────────────────────────────────────────────
-    console.log("👤 Creating merchandisers...");
-    const merchandisers = [];
-    for (let i = 0; i < MERCHANDISER_NAMES.length; i++) {
-        const m = await prisma.user.create({
+    console.log("👤 Creating merchandisers...")
+    const merchandisers = []
+    for (const m of MERCHANDISERS) {
+        const created = await prisma.user.create({
             data: {
-                name: MERCHANDISER_NAMES[i].name,
-                phone: `9800000${String(i + 1).padStart(3, "0")}`,
+                name: m.name,
+                phone: m.phone,
                 role: "MERCHANDISER",
-                shopName: MERCHANDISER_NAMES[i].name,
-                address: MERCHANDISER_NAMES[i].address,
+                shopName: m.shopName,
+                address: m.address,
                 isActive: true,
             },
-        });
-        merchandisers.push(m);
+        })
+        merchandisers.push(created)
     }
-    console.log(`   ✅ Created ${merchandisers.length} merchandisers`);
+    console.log(`   ✅ ${merchandisers.length} merchandisers created`)
 
     // ── 2. CREATE RETAILERS ───────────────────────────────────────────────────
-    console.log("🏪 Creating retailers...");
-    const retailers = [];
-    for (let i = 0; i < RETAILER_SHOPS.length; i++) {
-        const shop = RETAILER_SHOPS[i];
-        const r = await prisma.user.create({
+    console.log("🏪 Creating retailers with profiles...")
+    const retailerRecords = []
+    for (const r of RETAILERS) {
+        const created = await prisma.user.create({
             data: {
-                name: shop.shopName + " Owner",
-                phone: `9900000${String(i + 1).padStart(3, "0")}`,
+                name: r.ownerName,
+                phone: r.phone,
                 role: "RETAILER",
-                shopName: shop.shopName,
-                address: shop.address,
+                shopName: r.shopName,
+                address: r.address,
                 isActive: true,
             },
-        });
-        retailers.push(r);
+        })
+        retailerRecords.push({ ...created, profile: r })
     }
-    console.log(`   ✅ Created ${retailers.length} retailers`);
+    console.log(`   ✅ ${retailerRecords.length} retailers created`)
 
     // ── 3. CREATE PRODUCTS ────────────────────────────────────────────────────
-    console.log("📦 Creating products...");
-    const products = [];
+    console.log("📦 Creating products...")
+    const productRecords = []
     for (const p of PRODUCTS) {
-        const product = await prisma.product.create({
+        const created = await prisma.product.create({
             data: {
                 name: p.name,
                 brand: p.brand,
                 category: p.category,
                 unit: p.unit,
             },
-        });
-        products.push({ ...product, meta: p }); // attach metadata for seeding logic
+        })
+        productRecords.push({ ...created, meta: p })
     }
-    console.log(`   ✅ Created ${products.length} products`);
+    console.log(`   ✅ ${productRecords.length} products created`)
 
-    // ── 4. CREATE INVENTORY BATCHES ───────────────────────────────────────────
-    // Strategy: create batches with varied expiry dates so the engine has
-    // something to find. Some expiring very soon, some with time to spare.
-    console.log("🏭 Creating inventory batches...");
-    const batches = [];
-    const merchandiser = merchandisers[0]; // primary merchandiser
+    // ── 4. CREATE INVENTORY BATCHES WITH DYNAMIC PRICING ─────────────────────
+    // Key insight: batches are created with expiry dates that span a wide range.
+    // The warning threshold (warningDays) determines when the ENGINE flags them.
+    // Pricing drops based on urgency — closer to expiry = cheaper for retailer.
+    console.log("🏭 Creating inventory batches with dynamic pricing...")
+    const batchRecords = []
+    const merchandiser = merchandisers[0] // primary merchandiser owns all batches
 
-    for (const product of products) {
-        // Create 3-5 batches per product with different expiry dates
-        const batchCount = randomBetween(3, 5);
+    for (const product of productRecords) {
+        const { warningDays, wholesale, avgSellDays } = product.meta
 
-        for (let b = 0; b < batchCount; b++) {
-            // Mix of: already near expiry, mid-range, plenty of time
-            // This ensures the engine finds REAL at-risk items
-            let expiryDaysFromNow;
-            if (b === 0) {
-                // Critical: expiring in 2-5 days (definitely at risk)
-                expiryDaysFromNow = randomBetween(2, 5);
-            } else if (b === 1) {
-                // Warning: expiring in 6-15 days (may be at risk depending on threshold)
-                expiryDaysFromNow = randomBetween(6, 15);
-            } else {
-                // Safe: expiring in 30-90 days (safe, should NOT appear in at-risk)
-                expiryDaysFromNow = randomBetween(30, 90);
-            }
+        // Create 4 batches per product spanning different urgency levels
+        const batchConfigs = [
+            // Batch 1: CRITICAL — inside warning window, urgent
+            // Retailer gets significant discount to move this fast
+            {
+                expiryDays: Math.floor(warningDays * 0.3), // 30% of warning window left
+                qty: randomBetween(80, 300),
+                label: "critical"
+            },
+            // Batch 2: WARNING — just entered warning window
+            // Small discount to incentivize early action
+            {
+                expiryDays: Math.floor(warningDays * 0.7), // 70% of warning window left
+                qty: randomBetween(100, 400),
+                label: "warning"
+            },
+            // Batch 3: MONITOR — approaching warning window
+            // Full price, just starting to be tracked
+            {
+                expiryDays: Math.floor(warningDays * 1.2), // just outside window
+                qty: randomBetween(150, 500),
+                label: "monitor"
+            },
+            // Batch 4: SAFE — plenty of time, full price
+            {
+                expiryDays: warningDays + randomBetween(30, 90),
+                qty: randomBetween(200, 600),
+                label: "safe"
+            },
+        ]
 
-            const purchasePrice = randomFloat(
-                product.meta.priceRange[0] * 0.7,
-                product.meta.priceRange[0] * 0.85
-            );
-            const sellingPrice = randomFloat(
-                product.meta.priceRange[0],
-                product.meta.priceRange[1]
-            );
+        for (const config of batchConfigs) {
+            // Compute urgency for pricing — mirrors what engine will compute
+            const daysLeft = config.expiryDays
+            const urgency = daysLeft <= 0 ? 1.0
+                : daysLeft <= warningDays
+                    ? parseFloat((1 - daysLeft / warningDays).toFixed(4))
+                    : 0
+
+            // Apply dynamic discount based on urgency
+            const discountedPrice = computeDiscountedPrice(wholesale, urgency)
 
             const batch = await prisma.inventoryBatch.create({
                 data: {
                     productId: product.id,
                     merchandiserId: merchandiser.id,
-                    quantity: randomBetween(50, 500),
-                    purchasePrice,
-                    sellingPrice,
-                    expiryDate: daysFromNow(expiryDaysFromNow),
-                    createdAt: daysFromNow(-randomBetween(1, 30)),
+                    quantity: config.qty,
+                    purchasePrice: parseFloat((wholesale * 0.80).toFixed(2)), // merchandiser bought at 80% of wholesale
+                    sellingPrice: discountedPrice, // dynamic price based on urgency
+                    expiryDate: daysFromNow(config.expiryDays),
+                    createdAt: daysFromNow(-randomBetween(5, 45)),
                 },
-            });
-            batches.push(batch);
+            })
+            batchRecords.push({ ...batch, label: config.label, productMeta: product.meta })
         }
     }
-    console.log(`   ✅ Created ${batches.length} inventory batches`);
+    console.log(`   ✅ ${batchRecords.length} batches created with dynamic pricing`)
 
-    // ── 5. CREATE HISTORICAL ORDERS (90 days of history) ─────────────────────
-    // This is the most important part — it's what the scoring engine reads.
-    // Each retailer gets a different buying PERSONALITY so scoring produces
-    // varied, meaningful results.
+    // ── 5. CREATE REALISTIC ORDER HISTORY (120 days) ──────────────────────────
+    // This is the most important part for scoring.
+    // Each retailer's buying history directly determines their scores.
+    console.log("🛒 Creating 120 days of order history...")
+    let totalOrders = 0
+    let totalItems = 0
 
-    console.log("🛒 Creating order history (this takes a moment)...");
+    for (const retailer of retailerRecords) {
+        const { profile } = retailer
+        const { preferredCategories, orderFrequencyDays, avgUnitsPerOrder, reliability } = profile
 
-    // Retailer personalities — determines how they'll be scored
-    // Top retailers will score high, weak retailers will score low
-    const retailerPersonality = retailers.map((r, i) => ({
-        retailer: r,
-        orderFrequency: i < 5 ? "high" : i < 10 ? "medium" : "low",
-        // high = orders every 3-5 days, medium = every 8-12 days, low = every 20-30 days
-        preferredCategories:
-            i % 3 === 0
-                ? ["Dairy", "Beverages"]
-                : i % 3 === 1
-                    ? ["Snacks", "Biscuits"]
-                    : ["Staples", "Personal Care"],
-        avgOrderSize: i < 5 ? randomBetween(80, 150) : i < 10 ? randomBetween(30, 80) : randomBetween(5, 30),
-        paymentReliability: i < 5 ? 0.95 : i < 10 ? 0.80 : 0.60, // % of orders completed
-    }));
-
-    let totalOrders = 0;
-    let totalOrderItems = 0;
-
-    for (const persona of retailerPersonality) {
-        const { retailer, orderFrequency, preferredCategories, avgOrderSize, paymentReliability } = persona;
-
-        // Determine how many days between orders for this retailer
-        const daysBetweenOrders =
-            orderFrequency === "high"
-                ? randomBetween(3, 5)
-                : orderFrequency === "medium"
-                    ? randomBetween(8, 12)
-                    : randomBetween(20, 30);
-
-        // Generate orders going back 90 days
-        let currentDay = -90;
+        // Generate orders going back 120 days
+        let currentDay = -120
         while (currentDay < 0) {
-            const orderDate = daysFromNow(currentDay);
+            // Add slight randomness to order frequency (+/- 2 days)
+            const nextOrderGap = orderFrequencyDays + randomBetween(-2, 2)
 
-            // Skip this order based on reliability (simulates cancelled/missed orders)
-            if (Math.random() > paymentReliability) {
-                currentDay += daysBetweenOrders;
-                continue;
+            // Skip order based on reliability score
+            if (Math.random() > reliability) {
+                currentDay += nextOrderGap
+                continue
             }
 
-            // Pick 1-4 products for this order, preferring their category
-            const numProducts = randomBetween(1, 4);
-            const orderProducts = [];
+            const orderDate = daysFromNow(currentDay)
 
-            for (let p = 0; p < numProducts; p++) {
-                // 70% chance to pick from preferred category, 30% anything
-                const usePreferred = Math.random() < 0.7;
-                const candidateProducts = usePreferred
-                    ? products.filter((prod) => preferredCategories.includes(prod.meta.category))
-                    : products;
+            // Select products for this order
+            // 75% chance to pick from preferred categories, 25% anything
+            const numProducts = randomBetween(2, 5)
+            const selectedProducts = []
 
-                if (candidateProducts.length > 0) {
-                    const chosenProduct = randomItem(candidateProducts);
-                    // Avoid duplicating same product in one order
-                    if (!orderProducts.find((op) => op.id === chosenProduct.id)) {
-                        orderProducts.push(chosenProduct);
-                    }
+            for (let i = 0; i < numProducts; i++) {
+                const usePreferred = Math.random() < 0.75
+                const pool = usePreferred
+                    ? productRecords.filter(p => preferredCategories.includes(p.meta.category))
+                    : productRecords
+
+                if (pool.length === 0) continue
+                const picked = randomItem(pool)
+                if (!selectedProducts.find(p => p.id === picked.id)) {
+                    selectedProducts.push(picked)
                 }
             }
 
-            if (orderProducts.length === 0) {
-                currentDay += daysBetweenOrders;
-                continue;
+            if (selectedProducts.length === 0) {
+                currentDay += nextOrderGap
+                continue
             }
 
-            // Find a valid batch for each product (one that existed at order time)
-            const orderItemsData = [];
-            for (const product of orderProducts) {
-                const relevantBatch = batches.find((b) => b.productId === product.id);
-                if (!relevantBatch) continue;
+            // Build order items — find a batch for each product
+            const orderItems = []
+            for (const product of selectedProducts) {
+                const batch = batchRecords.find(b => b.productId === product.id)
+                if (!batch) continue
 
-                const qty = randomBetween(
-                    Math.floor(avgOrderSize * 0.5),
-                    Math.floor(avgOrderSize * 1.5)
-                );
+                // Units ordered varies by retailer tier
+                const units = randomBetween(
+                    Math.floor(avgUnitsPerOrder * 0.5),
+                    Math.floor(avgUnitsPerOrder * 1.5)
+                )
 
-                orderItemsData.push({
-                    inventoryBatchId: relevantBatch.id,
-                    quantity: qty,
-                    price: relevantBatch.sellingPrice,
-                });
+                orderItems.push({
+                    inventoryBatchId: batch.id,
+                    quantity: units,
+                    price: batch.sellingPrice,
+                })
             }
 
-            if (orderItemsData.length === 0) {
-                currentDay += daysBetweenOrders;
-                continue;
+            if (orderItems.length === 0) {
+                currentDay += nextOrderGap
+                continue
             }
 
-            // Create the order
-            const order = await prisma.order.create({
+            // Determine order status — tier 1 almost always complete
+            const status = Math.random() < reliability ? "COMPLETED" : "CANCELLED"
+
+            await prisma.order.create({
                 data: {
                     retailerId: retailer.id,
                     merchandiserId: merchandiser.id,
-                    status: "COMPLETED",
+                    status,
                     createdAt: orderDate,
-                    items: {
-                        create: orderItemsData,
-                    },
+                    items: { create: orderItems },
                 },
-            });
+            })
 
-            totalOrders++;
-            totalOrderItems += orderItemsData.length;
-            currentDay += daysBetweenOrders + randomBetween(-1, 1); // slight randomness
+            totalOrders++
+            totalItems += orderItems.length
+            currentDay += nextOrderGap
         }
     }
+    console.log(`   ✅ ${totalOrders} orders, ${totalItems} order items`)
 
-    console.log(`   ✅ Created ${totalOrders} orders with ${totalOrderItems} order items`);
+    // ── 6. CREATE DAILY SALES (sell-through data) ─────────────────────────────
+    // Sell-through score depends on this — how fast does each retailer
+    // actually clear stock to end customers?
+    // Tier 1 retailers sell fast, Tier 3 slow.
+    console.log("📊 Creating daily sales data...")
+    let totalSales = 0
 
-    // ── 6. CREATE DAILY SALES (retailer sell-through data) ───────────────────
-    // This is what the sell-through score reads — how fast do retailers
-    // actually sell inventory to end customers
-    console.log("📊 Creating daily sales data...");
-    let totalSales = 0;
+    for (const retailer of retailerRecords) {
+        const { profile } = retailer
+        const { preferredCategories, sellThroughSpeed } = profile
 
-    for (const persona of retailerPersonality) {
-        const { retailer, orderFrequency, preferredCategories } = persona;
+        // Velocity multiplier based on tier
+        const velocityMultiplier = sellThroughSpeed === "fast" ? 1.8
+            : sellThroughSpeed === "medium" ? 1.0
+                : 0.45
 
-        // Sales velocity multiplier — high-frequency retailers sell faster
-        const velocityMultiplier =
-            orderFrequency === "high" ? 1.5 : orderFrequency === "medium" ? 1.0 : 0.5;
-
-        // For each product this retailer buys, generate daily sales going back 60 days
-        const relevantProducts = products.filter((p) =>
+        const relevantProducts = productRecords.filter(p =>
             preferredCategories.includes(p.meta.category)
-        );
+        )
 
         for (const product of relevantProducts) {
-            // Not every product is sold every day — skip some days
-            for (let day = -60; day < 0; day++) {
-                // 60% chance of having a sale on any given day for preferred products
-                if (Math.random() > 0.6) continue;
+            const { avgSellDays } = product.meta
 
-                const baseDailySales = Math.ceil(
-                    (product.meta.avgSellDays > 0 ? 30 / product.meta.avgSellDays : 2) * velocityMultiplier
-                );
-                const quantity = randomBetween(
-                    Math.max(1, Math.floor(baseDailySales * 0.5)),
-                    Math.ceil(baseDailySales * 1.5)
-                );
+            // Generate daily sales for last 90 days
+            for (let day = -90; day < 0; day++) {
+                // Tier 1: sells 80% of days, Tier 3: sells 40% of days
+                const saleChance = sellThroughSpeed === "fast" ? 0.80
+                    : sellThroughSpeed === "medium" ? 0.60
+                        : 0.40
 
-                const saleDate = daysFromNow(day);
-                // Normalize to midnight for the unique constraint
-                saleDate.setHours(0, 0, 0, 0);
+                if (Math.random() > saleChance) continue
+
+                // Base daily sales = (units per month) / 30 × velocity
+                const monthlyUnits = avgSellDays > 0 ? 30 / avgSellDays : 2
+                const dailyQty = Math.max(1, Math.round(
+                    monthlyUnits * velocityMultiplier * randomFloat(0.7, 1.3)
+                ))
+
+                const saleDate = daysFromNow(day)
+                saleDate.setHours(0, 0, 0, 0)
 
                 try {
                     await prisma.dailySale.create({
                         data: {
                             retailerId: retailer.id,
                             productId: product.id,
-                            quantity,
+                            quantity: dailyQty,
                             date: saleDate,
                         },
-                    });
-                    totalSales++;
-                } catch (e) {
-                    // Skip duplicate date entries (unique constraint)
+                    })
+                    totalSales++
+                } catch {
+                    // Skip duplicate date+retailer+product combos
                 }
             }
         }
     }
-
-    console.log(`   ✅ Created ${totalSales} daily sale records`);
+    console.log(`   ✅ ${totalSales} daily sale records`)
 
     // ── 7. CREATE RETAILER STOCK ──────────────────────────────────────────────
-    console.log("📦 Creating retailer stock records...");
-    let totalStock = 0;
+    console.log("📦 Creating retailer stock levels...")
+    let totalStock = 0
 
-    for (const persona of retailerPersonality) {
-        const { retailer, preferredCategories } = persona;
-        const relevantProducts = products.filter((p) =>
-            preferredCategories.includes(p.meta.category)
-        );
+    for (const retailer of retailerRecords) {
+        const { profile } = retailer
+        const relevantProducts = productRecords.filter(p =>
+            profile.preferredCategories.includes(p.meta.category)
+        )
 
         for (const product of relevantProducts) {
+            // Tier 1 holds more stock, Tier 3 holds less
+            const stockQty = profile.tier === 1 ? randomBetween(50, 250)
+                : profile.tier === 2 ? randomBetween(20, 100)
+                    : randomBetween(5, 40)
+
             await prisma.retailerStock.upsert({
-                where: {
-                    retailerId_productId: {
-                        retailerId: retailer.id,
-                        productId: product.id,
-                    },
-                },
+                where: { retailerId_productId: { retailerId: retailer.id, productId: product.id } },
                 update: {},
                 create: {
                     retailerId: retailer.id,
                     productId: product.id,
-                    quantity: randomBetween(10, 200),
+                    quantity: stockQty,
                 },
-            });
-            totalStock++;
+            })
+            totalStock++
         }
     }
-
-    console.log(`   ✅ Created ${totalStock} retailer stock records`);
+    console.log(`   ✅ ${totalStock} retailer stock records`)
 
     // ── SUMMARY ───────────────────────────────────────────────────────────────
-    console.log("\n═══════════════════════════════════════════");
-    console.log("✅ SEED COMPLETE — Here's what was created:");
-    console.log("═══════════════════════════════════════════");
-    console.log(`   👤 Merchandisers  : ${merchandisers.length}`);
-    console.log(`   🏪 Retailers      : ${retailers.length}`);
-    console.log(`   📦 Products       : ${products.length}`);
-    console.log(`   🏭 Batches        : ${batches.length} (with varied expiry dates)`);
-    console.log(`   🛒 Orders         : ${totalOrders}`);
-    console.log(`   📋 Order Items    : ${totalOrderItems}`);
-    console.log(`   📊 Daily Sales    : ${totalSales}`);
-    console.log(`   📦 Retailer Stock : ${totalStock}`);
-    console.log("═══════════════════════════════════════════");
-    console.log("\n💡 Retailer score distribution:");
-    console.log("   Retailers 1-5  → HIGH buyers (will score highest)");
-    console.log("   Retailers 6-10 → MEDIUM buyers (will score mid)");
-    console.log("   Retailers 11-15→ LOW buyers  (will score lowest)");
-    console.log("\n🚀 Now hit POST /api/engine/run to see the engine work!\n");
+    console.log("\n═══════════════════════════════════════════════════════")
+    console.log("✅ SHELFSENSE SEED COMPLETE")
+    console.log("═══════════════════════════════════════════════════════")
+    console.log(`   👤 Merchandisers  : ${merchandisers.length}`)
+    console.log(`   🏪 Retailers      : ${retailerRecords.length} (5 Tier1 / 5 Tier2 / 5 Tier3)`)
+    console.log(`   📦 Products       : ${productRecords.length}`)
+    console.log(`   🏭 Batches        : ${batchRecords.length} (with dynamic pricing)`)
+    console.log(`   🛒 Orders         : ${totalOrders} (120 days history)`)
+    console.log(`   📋 Order Items    : ${totalItems}`)
+    console.log(`   📊 Daily Sales    : ${totalSales} (90 days)`)
+    console.log(`   📦 Retailer Stock : ${totalStock}`)
+    console.log("═══════════════════════════════════════════════════════")
+    console.log("\n💡 Key improvements in this seed:")
+    console.log("   • warningDays is generous — retailers get real lead time")
+    console.log("   • Prices drop as urgency increases (dynamic pricing)")
+    console.log("   • Retailers have distinct profiles — scoring will differentiate")
+    console.log("   • 120 days of order history for better score accuracy")
+    console.log("   • Real Indian retailer names and locations")
+    console.log("\n🚀 Now run POST /api/engine/run to see scores!\n")
 }
 
 main()
-    .catch((e) => {
-        console.error("❌ Seed failed:", e);
-        process.exit(1);
+    .catch(e => {
+        console.error("❌ Seed failed:", e)
+        process.exit(1)
     })
     .finally(async () => {
-        await prisma.$disconnect();
-    });
+        await prisma.$disconnect()
+    })
