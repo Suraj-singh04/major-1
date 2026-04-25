@@ -31,7 +31,6 @@ import {
   Star,
 } from "lucide-react";
 
-const MERCHANDISER_ID = "cmlxazd3s0000tt1bqbvqj8en";
 
 function ScoreBar({ label, value, max = 100, color }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
@@ -71,6 +70,16 @@ export default function RetailersPage() {
   useEffect(() => {
     async function fetchData() {
       try {
+        // Dynamically resolve the merchandiser ID — never hardcode IDs that break on re-seed
+        const meRes = await fetch("/api/users/me");
+        const meData = await meRes.json();
+        if (!meData.success) {
+          console.error("Could not resolve merchandiser:", meData.error);
+          setLoading(false);
+          return;
+        }
+        const MERCHANDISER_ID = meData.user.id;
+
         const res = await fetch(`/api/retailers?merchandiserId=${MERCHANDISER_ID}`);
         const data = await res.json();
         if (data.success) setRetailers(data.retailers);

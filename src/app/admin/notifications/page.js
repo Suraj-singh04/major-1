@@ -84,8 +84,16 @@ export default function NotificationsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // NOTE: swap for the authenticated user's ID once auth is wired up
-        const MERCHANDISER_ID = "cmlxazd3s0000tt1bqbvqj8en";
+        // Dynamically resolve the merchandiser ID — never hardcode IDs that break on re-seed
+        const meRes = await fetch("/api/users/me");
+        const meData = await meRes.json();
+        if (!meData.success) {
+          console.error("Could not resolve merchandiser:", meData.error);
+          setLoading(false);
+          return;
+        }
+        const MERCHANDISER_ID = meData.user.id;
+
         const res = await fetch(`/api/notifications/history?merchandiserId=${MERCHANDISER_ID}`);
         const data = await res.json();
         if (!data.success) {

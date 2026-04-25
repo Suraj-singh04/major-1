@@ -13,7 +13,6 @@ import {
   PackageSearch, Users, Award,
 } from "lucide-react";
 
-const MERCHANDISER_ID = "cmlxazd3s0000tt1bqbvqj8en";
 
 const PERIOD_OPTIONS = [
   { label: "Last 7d", value: 7 },
@@ -74,6 +73,15 @@ export default function AnalyticsPage() {
     setData(null);
     async function fetchData() {
       try {
+        // Dynamically resolve the merchandiser ID — never hardcode IDs that break on re-seed
+        const meRes = await fetch("/api/users/me");
+        const meData = await meRes.json();
+        if (!meData.success) {
+          console.error("Could not resolve merchandiser:", meData.error);
+          return;
+        }
+        const MERCHANDISER_ID = meData.user.id;
+
         const res = await fetch(`/api/analytics?merchandiserId=${MERCHANDISER_ID}&days=${period}`);
         const json = await res.json();
         if (json.success) setData(json);
