@@ -1,4 +1,4 @@
-import {prisma} from "@/lib/db";
+import { prisma } from "@/lib/db";
 
 export async function computeProductAnalytics() {
     const products = await prisma.product.findMany({
@@ -69,7 +69,19 @@ export async function computeProductAnalytics() {
             stdDevDays = Math.sqrt(variance)
         }
 
-        const dynamicThresholdDays = Math.ceil(avgDaysToSell + 1.5 * stdDevDays)
+        const CATEGORY_MIN_LEAD_DAYS = {
+            'Dairy': 7,   // milk/curd — short shelf, but retailers need at least a week
+            'Beverages': 14,  // juice/drinks — 2 weeks minimum
+            'Instant Foods': 30, // Maggi etc — need a month minimum
+            'Snacks': 21,  // chips/namkeen — 3 weeks
+            'Biscuits': 25,  // biscuits — 3.5 weeks
+            'Personal Care': 35, // soap/toothpaste — 5 weeks
+            'Staples': 40,  // atta/oil/salt — nearly 6 weeks
+        }
+
+        const categoryMinimum = CATEGORY_MIN_LEAD_DAYS[product.category] ?? 14
+        const computed = Math.ceil(avgDaysToSell + 1.5 * stdDevDays)
+        const dynamicThresholdDays = Math.max(computed, categoryMinimum)
 
         await prisma.productAnalytics.upsert({
             where: { productId: product.id },
