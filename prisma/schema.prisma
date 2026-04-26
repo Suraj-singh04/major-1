@@ -154,6 +154,7 @@ model NotificationLog {
   inventoryBatch   InventoryBatch @relation(fields: [inventoryBatchId], references: [id])
   urgencyScore     Float
   retailerRank     Int
+  offeredPrice     Float?
   sentAt           DateTime       @default(now())
   viewedAt         DateTime?
   orderedAt        DateTime?

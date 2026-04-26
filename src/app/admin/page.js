@@ -19,7 +19,13 @@ export default async function AdminPage() {
   try {
     const now = new Date();
   
-  // 1. STATS METRICS calculation
+  // Fetch current merchandiser dynamically
+  const currentMerchandiser = await prisma.user.findFirst({
+    where: { role: "MERCHANDISER" },
+    select: { name: true }
+  });
+  const firstName = currentMerchandiser?.name?.split(' ')[0] ?? 'there';
+  
   const fiveDaysFromNow = new Date();
   fiveDaysFromNow.setDate(now.getDate() + 5);
   
@@ -29,12 +35,14 @@ export default async function AdminPage() {
     }
   });
 
+  const expiringTodayStart = new Date();
+  expiringTodayStart.setHours(0, 0, 0, 0);
   const expiringTodayEnd = new Date();
   expiringTodayEnd.setHours(23, 59, 59, 999);
   
   const expiringTodayCount = await prisma.inventoryBatch.count({
     where: {
-      expiryDate: { lte: expiringTodayEnd }
+      expiryDate: { gte: expiringTodayStart, lte: expiringTodayEnd }
     }
   });
 
@@ -114,7 +122,7 @@ export default async function AdminPage() {
       timeLabel: dateStr,
       atRisk: run.atRiskCount,
       notified: run.notifiedCount,
-      runTime: run.runTimeSeconds.toFixed(1)
+      runTime: (run.runTimeSeconds ?? 0).toFixed(1)
     };
   });
 
@@ -129,7 +137,7 @@ export default async function AdminPage() {
         <header className="mb-10 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 drop-shadow-sm">
-              Good morning, Vikram <span className="inline-block hover:animate-pulse">👋</span>
+          Good morning, {firstName} <span className="inline-block hover:animate-pulse">👋</span>
             </h1>
             <p className="mt-2 text-base font-medium text-slate-500">
               Overview of your merchandiser engine status.
@@ -255,7 +263,7 @@ export default async function AdminPage() {
                   <CardTitle className="text-xl font-extrabold text-slate-800">Top Performing Retailers</CardTitle>
                   <CardDescription className="font-medium text-slate-500 mt-1">Ranked by successful conversion scores</CardDescription>
                 </div>
-                <Link href="/admin/matches" className="flex items-center text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50/80 px-4 py-2 rounded-full hover:bg-blue-100/80 shadow-sm">
+                <Link href="/admin/retailers" className="flex items-center text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50/80 px-4 py-2 rounded-full hover:bg-blue-100/80 shadow-sm">
                   View All <ArrowRight className="ml-1.5 h-4 w-4" />
                 </Link>
               </CardHeader>
