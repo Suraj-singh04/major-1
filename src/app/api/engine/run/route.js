@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import {computeProductAnalytics} from "@/lib/engine/computeProductAnalytics";
 import {computeAtRiskBatches} from "@/lib/engine/computeAtRiskBatches";
 import {scoreRetailersForProduct} from "@/lib/engine/scoreRetailer";

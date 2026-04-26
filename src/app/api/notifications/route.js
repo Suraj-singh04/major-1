@@ -1,12 +1,13 @@
-import {NextResponse} from "next/server";
-import {prisma} from "@/lib/db";
+export const dynamic = 'force-dynamic';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 
 export async function GET(request) {
     try {
-        const {searchParams } = new URL(request.url)
+        const { searchParams } = new URL(request.url)
         const retailerId = searchParams.get('retailerId')
 
-        if(!retailerId) {
+        if (!retailerId) {
             return NextResponse.json(
                 { success: false, error: "retailerId is required as a query parameter" },
                 { status: 400 }
@@ -14,8 +15,8 @@ export async function GET(request) {
         }
 
         const retailer = await prisma.user.findUnique({
-            where: {id: retailerId},
-            select: {id: true, role: true, shopName:true, isActive: true}
+            where: { id: retailerId },
+            select: { id: true, role: true, shopName: true, isActive: true }
         })
 
         if (!retailer) {
@@ -25,7 +26,7 @@ export async function GET(request) {
             )
         }
 
-        if(retailer.role !== "RETAILER") {
+        if (retailer.role !== "RETAILER") {
             return NextResponse.json(
                 { success: false, error: "Only retailers have a notification inbox" },
                 { status: 403 }
@@ -41,19 +42,19 @@ export async function GET(request) {
         const whereClause = {
             retailerId,
             inventoryBatch: {
-                expiryDate: {gt: new Date()},
-                quantity: {gt: 0}
+                expiryDate: { gt: new Date() },
+                quantity: { gt: 0 }
             },
-            ...(outcomeFilter ? {outcome: outcomeFilter} : {}),
+            ...(outcomeFilter ? { outcome: outcomeFilter } : {}),
         }
 
         const [total, notifications] = await Promise.all([
-            prisma.notificationLog.count({ where : whereClause}),
+            prisma.notificationLog.count({ where: whereClause }),
             prisma.notificationLog.findMany({
                 where: whereClause,
                 orderBy: [
-                    { urgencyScore: "desc"},
-                    { sentAt: "desc"}
+                    { urgencyScore: "desc" },
+                    { sentAt: "desc" }
                 ],
                 skip,
                 take: limit,
@@ -75,36 +76,54 @@ export async function GET(request) {
             })
         ])
 
-        const formattedNotifications = notifications.map(n => ({
-            notificationId: n.id,
-            outcome: n.outcome,
-            urgencyScore: n.urgencyScore,
-            retailerRank: n.retailerRank,
-            sentAt: n.sentAt,
-            viewedAt: n.viewedAt,
-            orderedAt: n.orderedAt,
+        const formattedNotifications = notifications.map(n => {
 
-            batch: {
-                batchId:      n.inventoryBatch.id,
-                quantity:     n.inventoryBatch.quantity,
-                sellingPrice: n.inventoryBatch.sellingPrice,
-                expiryDate:   n.inventoryBatch.expiryDate,
+            const normalPrice = n.inventoryBatch.sellingPrice;
+            const offeredPrice = n.offeredPrice ?? normalPrice
+            const savingPerUnit = parseFloat((normalPrice - offeredPrice).toFixed(2))
+            const savingPct = normalPrice > 0 ? Math.round((savingPerUnit / normalPrice) * 100) : 0
 
-                daysRemaining: Math.max(
-                    0,
-                    Math.ceil(
-                        (new Date(n.inventoryBatch.expiryDate) - new Date())/(1000*60*60*24)
+            return {
+                notificationId: n.id,
+                outcome: n.outcome,
+                urgencyScore: n.urgencyScore,
+                retailerRank: n.retailerRank,
+                sentAt: n.sentAt,
+                viewedAt: n.viewedAt,
+                orderedAt: n.orderedAt,
+
+                pricing: {
+                    normalPrice,
+                    offeredPrice,
+                    savingPerUnit,
+                    savingPct,
+                    totalSavingIfBuyAll: parseFloat(
+                        (savingPerUnit * n.inventoryBatch.quantity).toFixed(2)
                     )
-                )
-            },
-            product: {
-                productId: n.inventoryBatch.product.id,
-                name:      n.inventoryBatch.product.name,
-                brand:     n.inventoryBatch.product.brand,
-                category:  n.inventoryBatch.product.category,
-                unit:      n.inventoryBatch.product.unit
+                },
+
+                batch: {
+                    batchId: n.inventoryBatch.id,
+                    quantity: n.inventoryBatch.quantity,
+                    sellingPrice: n.inventoryBatch.sellingPrice,
+                    expiryDate: n.inventoryBatch.expiryDate,
+
+                    daysRemaining: Math.max(
+                        0,
+                        Math.ceil(
+                            (new Date(n.inventoryBatch.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)
+                        )
+                    )
+                },
+                product: {
+                    productId: n.inventoryBatch.product.id,
+                    name: n.inventoryBatch.product.name,
+                    brand: n.inventoryBatch.product.brand,
+                    category: n.inventoryBatch.product.category,
+                    unit: n.inventoryBatch.product.unit
+                }
             }
-        }))
+        })
 
         const urgentCount = formattedNotifications.filter(n => n.urgencyScore > 0.7).length
         const pendingCount = formattedNotifications.filter(n => n.outcome === "pending").length
@@ -112,7 +131,7 @@ export async function GET(request) {
         return NextResponse.json({
             success: true,
             retailer: {
-                id:       retailer.id,
+                id: retailer.id,
                 shopName: retailer.shopName
             },
             pagination: {
@@ -120,17 +139,17 @@ export async function GET(request) {
                 limit,
                 total,
                 totalPages: Math.ceil(total / limit),
-                hasMore:    page * limit < total
+                hasMore: page * limit < total
             },
             summary: {
-                total:        formattedNotifications.length,
+                total: formattedNotifications.length,
                 urgentCount,
                 pendingCount
             },
             notifications: formattedNotifications
         })
 
-    } catch (error){
+    } catch (error) {
         console.error("Notifications fetch error:", error)
         return NextResponse.json(
             { success: false, error: error.message },
