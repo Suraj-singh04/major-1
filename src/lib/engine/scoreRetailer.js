@@ -1,4 +1,4 @@
-import {prisma} from "@/lib/db";
+import { prisma } from "@/lib/db";
 
 async function getPurchaseFrequencyScores(productId, retailerIds) {
     const product = await prisma.product.findUnique({
@@ -127,7 +127,7 @@ async function getRecencyScores(productId, retailerIds) {
         scores[retailerId] = parseFloat(Math.exp(-0.05 * daysSince).toFixed(4))
     }
 
-    return scores
+    return normalizeScores(scores)
 }
 
 async function getSellThroughScores(productId, retailerIds) {
@@ -206,9 +206,9 @@ export async function scoreRetailersForProduct(productId) {
 
     // Default weights — will be tuned by L5 later
     const weights = {
-        frequency:   0.20,
-        volume:      0.20,
-        recency:     0.15,
+        frequency: 0.20,
+        volume: 0.20,
+        recency: 0.15,
         sellThrough: 0.25,
         reliability: 0.20,
     }
@@ -216,9 +216,9 @@ export async function scoreRetailersForProduct(productId) {
     const scoredRetailers = retailers.map(retailer => {
         const id = retailer.id
         const composite = parseFloat((
-            weights.frequency   * (freqScores[id]       ?? 0) +
-            weights.volume      * (volScores[id]         ?? 0) +
-            weights.recency     * (recencyScores[id]     ?? 0) +
+            weights.frequency * (freqScores[id] ?? 0) +
+            weights.volume * (volScores[id] ?? 0) +
+            weights.recency * (recencyScores[id] ?? 0) +
             weights.sellThrough * (sellThroughScores[id] ?? 0) +
             weights.reliability * (reliabilityScores[id] ?? 0)
         ).toFixed(4))
@@ -228,9 +228,9 @@ export async function scoreRetailersForProduct(productId) {
             retailerName: retailer.name,
             shopName: retailer.shopName,
             scores: {
-                frequency:   parseFloat((freqScores[id]       ?? 0).toFixed(4)),
-                volume:      parseFloat((volScores[id]         ?? 0).toFixed(4)),
-                recency:     parseFloat((recencyScores[id]     ?? 0).toFixed(4)),
+                frequency: parseFloat((freqScores[id] ?? 0).toFixed(4)),
+                volume: parseFloat((volScores[id] ?? 0).toFixed(4)),
+                recency: parseFloat((recencyScores[id] ?? 0).toFixed(4)),
                 sellThrough: parseFloat((sellThroughScores[id] ?? 0).toFixed(4)),
                 reliability: parseFloat((reliabilityScores[id] ?? 0).toFixed(4)),
             },
@@ -251,22 +251,22 @@ export async function scoreRetailersForProduct(productId) {
             },
             update: {
                 purchaseFrequencyScore: scored.scores.frequency,
-                volumeScore:            scored.scores.volume,
-                recencyScore:           scored.scores.recency,
-                sellThroughScore:       scored.scores.sellThrough,
-                reliabilityScore:       scored.scores.reliability,
-                compositeScore:         scored.compositeScore,
-                lastUpdated:            new Date()
+                volumeScore: scored.scores.volume,
+                recencyScore: scored.scores.recency,
+                sellThroughScore: scored.scores.sellThrough,
+                reliabilityScore: scored.scores.reliability,
+                compositeScore: scored.compositeScore,
+                lastUpdated: new Date()
             },
             create: {
-                retailerId:             scored.retailerId,
+                retailerId: scored.retailerId,
                 productId,
                 purchaseFrequencyScore: scored.scores.frequency,
-                volumeScore:            scored.scores.volume,
-                recencyScore:           scored.scores.recency,
-                sellThroughScore:       scored.scores.sellThrough,
-                reliabilityScore:       scored.scores.reliability,
-                compositeScore:         scored.compositeScore,
+                volumeScore: scored.scores.volume,
+                recencyScore: scored.scores.recency,
+                sellThroughScore: scored.scores.sellThrough,
+                reliabilityScore: scored.scores.reliability,
+                compositeScore: scored.compositeScore,
             }
         })
     }

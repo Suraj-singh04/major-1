@@ -49,8 +49,8 @@ function ScoreBar({ label, value, max = 100, color }) {
 }
 
 function scoreColor(score) {
-  if (score >= 75) return "text-emerald-600 bg-emerald-50 border-emerald-200";
-  if (score >= 50) return "text-amber-700 bg-amber-50 border-amber-200";
+  if (score >= 0.75) return "text-emerald-600 bg-emerald-50 border-emerald-200";
+  if (score >= 0.50) return "text-amber-700 bg-amber-50 border-amber-200";
   return "text-red-600 bg-red-50 border-red-200";
 }
 
@@ -119,13 +119,12 @@ export default function RetailersPage() {
               {/* Drawer Header */}
               <div className="p-6 bg-white border-b border-slate-200/80 relative overflow-hidden">
                 <div
-                  className={`absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r ${
-                    selected.compositeScore >= 75
-                      ? "from-emerald-400 to-teal-500"
-                      : selected.compositeScore >= 50
+                  className={`absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r ${selected.compositeScore >= 75
+                    ? "from-emerald-400 to-teal-500"
+                    : selected.compositeScore >= 50
                       ? "from-amber-400 to-orange-500"
                       : "from-red-500 to-rose-600"
-                  }`}
+                    }`}
                 />
                 <SheetHeader className="pt-2">
                   <div className="flex items-start gap-4">
@@ -157,7 +156,7 @@ export default function RetailersPage() {
                     <p className="text-5xl font-black tracking-tighter">{selected.compositeScore}</p>
                     <div className="mb-1">
                       <div className="flex gap-0.5 mb-0.5">
-                        {[1,2,3,4,5].map(i => (
+                        {[1, 2, 3, 4, 5].map(i => (
                           <Star
                             key={i}
                             className={`h-4 w-4 ${i <= Math.round(selected.compositeScore / 20) ? "text-amber-400 fill-amber-400" : "text-slate-600"}`}
@@ -192,11 +191,11 @@ export default function RetailersPage() {
                 {/* Score Breakdown */}
                 <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm space-y-3.5">
                   <p className="text-sm font-bold text-slate-700 mb-4">Score Breakdown</p>
-                  <ScoreBar label="Purchase Freq." value={selected.breakdown.purchaseFrequency} color="bg-gradient-to-r from-blue-500 to-blue-400" />
-                  <ScoreBar label="Volume" value={selected.breakdown.volume} color="bg-gradient-to-r from-violet-500 to-indigo-400" />
-                  <ScoreBar label="Recency" value={selected.breakdown.recency} color="bg-gradient-to-r from-amber-400 to-orange-400" />
-                  <ScoreBar label="Sell-Through" value={selected.breakdown.sellThrough} color="bg-gradient-to-r from-teal-500 to-emerald-400" />
-                  <ScoreBar label="Reliability" value={selected.breakdown.reliability} color="bg-gradient-to-r from-rose-400 to-pink-400" />
+                  <ScoreBar label="Purchase Freq." value={selected.breakdown.purchaseFrequency} max={1} color="bg-gradient-to-r from-blue-500 to-blue-400" />
+                  <ScoreBar label="Volume" value={selected.breakdown.volume} max={1} color="bg-gradient-to-r from-violet-500 to-indigo-400" />
+                  <ScoreBar label="Recency" value={selected.breakdown.recency} max={1} color="bg-gradient-to-r from-amber-400 to-orange-400" />
+                  <ScoreBar label="Sell-Through" value={selected.breakdown.sellThrough} max={1} color="bg-gradient-to-r from-teal-500 to-emerald-400" />
+                  <ScoreBar label="Reliability" value={selected.breakdown.reliability} max={1} color="bg-gradient-to-r from-rose-400 to-pink-400" />
                 </div>
 
                 {/* Best categories */}
